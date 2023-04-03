@@ -5,7 +5,7 @@ from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-
+DATE_FORMAT = "%Y-%m-%d"
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.0/howto/deployment/checklist/
@@ -17,6 +17,8 @@ SECRET_KEY = my_settings.SECRET_KEY
 DEBUG = True
 
 ALLOWED_HOSTS = ['api.kingbuserp.link', '127.0.0.1']
+CORS_ORIGIN_WHITELIST = ['http://api.kingbuserp.link', 'http://127.0.0.1:8000']
+
 APPEND_SLASH = False
 
 # Application definition
@@ -32,7 +34,9 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
 
+    'dispatch',
     'humanresource',
+    'vehicle'
 ]
 
 MIDDLEWARE = [
@@ -114,6 +118,7 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+AUTH_USER_MODEL = 'humanresource.Member'
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': ('rest_framework.permissions.IsAuthenticated',),
     'DEFAULT_AUTHENTICATION_CLASSES': ('rest_framework_simplejwt.authentication.JWTAuthentication',),

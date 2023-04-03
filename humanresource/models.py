@@ -1,6 +1,13 @@
 from django.db import models
 
 class Member(models.Model):
+    username = None
+    USERNAME_FIELD = 'user_id'
+    REQUIRED_FIELDS = []
+    is_anonymous = False
+    is_authenticated = True
+    is_active = True
+
     user_id = models.CharField(max_length=100, verbose_name='사용자id', unique=True, null=True, blank=True)
     password = models.TextField(verbose_name='비밀번호', null=False, blank=True)
     name = models.CharField(verbose_name='이름', max_length=100, null=False)
