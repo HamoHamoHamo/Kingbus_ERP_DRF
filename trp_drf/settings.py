@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     # 3rdparty apps
     'corsheaders',
     'rest_framework',
+    'rest_framework_simplejwt.token_blacklist', # 토큰 재발급 하면서 만료시켜줌
 
     'dispatch',
     'humanresource',
@@ -126,8 +127,8 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 100,
 }
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=5),
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=14),
     'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': False,
+    'BLACKLIST_AFTER_ROTATION': True,
 }

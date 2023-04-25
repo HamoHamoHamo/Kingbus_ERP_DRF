@@ -17,17 +17,17 @@ class UserLoginView(APIView):
     serializer_class = UserLoginSerializer
     permission_classes = (AllowAny,)
 
-    def get(self, request):
-        username = request.GET.get('username')
-        if username is not None:
-            # if 'username' in request.GET:
-            if len(username)>=4:
-                try:
-                    Member.objects.get(username=username)
-                    return Response({'result':'exists'},status=status.HTTP_409_CONFLICT)
-                except ObjectDoesNotExist:
-                    return Response({'result':'not exists'},status=status.HTTP_202_ACCEPTED)
-        return Response(status=status.HTTP_400_BAD_REQUEST)
+    #def get(self, request):
+    #    username = request.GET.get('username')
+    #    if username is not None:
+    #        # if 'username' in request.GET:
+    #        if len(username)>=4:
+    #            try:
+    #                Member.objects.get(username=username)
+    #                return Response({'result':'exists'},status=status.HTTP_409_CONFLICT)
+    #            except ObjectDoesNotExist:
+    #                return Response({'result':'not exists'},status=status.HTTP_202_ACCEPTED)
+    #    return Response(status=status.HTTP_400_BAD_REQUEST)
 
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
