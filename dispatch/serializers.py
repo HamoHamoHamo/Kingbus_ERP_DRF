@@ -66,7 +66,7 @@ class DriverCheckSerializer(serializers.ModelSerializer):
 		check_type = self.context['check_type']
 		user = self.context['user']
 		try:
-			datetime.strptime(time, "%Y-%m-%d %H:%M")
+			datetime.strptime(time, "%H:%M")
 		except ValueError:
 			raise serializers.ValidationError("Time Format Error")
 		# 종류3개중 어느것도 아닐때
