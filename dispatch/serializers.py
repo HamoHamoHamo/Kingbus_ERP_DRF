@@ -5,6 +5,11 @@ from django.shortcuts import get_object_or_404
 
 from .models import DispatchOrderWaypoint, DispatchOrder, DispatchRegularly, DispatchRegularlyConnect, DispatchOrderConnect, DriverCheck
 
+class CheckTimeSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = DriverCheck
+		fields = ['wake_time', 'drive_time', 'departure_time']
+
 class DispatchRegularlySerializer(serializers.ModelSerializer):
 	group = serializers.ReadOnlyField(source="group.name")
 	# connect = DispatchRegularlyConnectSerializer(many=True)
@@ -23,10 +28,11 @@ class DispatchRegularlyConnectSerializer(serializers.ModelSerializer):
 	week = serializers.ReadOnlyField(source="regularly_id.week")
 	detailed_route = serializers.ReadOnlyField(source="regularly_id.detailed_route")
 	bus_id = serializers.ReadOnlyField(source="bus_id.vehicle_num")
+	check_regularly_connect = CheckTimeSerializer(read_only=True)
 
 	class Meta:
 		model = DispatchRegularlyConnect
-		fields = ['id', 'detailed_route', 'group', 'references', 'departure', 'arrival', 'week', 'route', 'departure_date', 'arrival_date', 'bus_id', 'price', 'driver_allowance']
+		fields = ['id', 'check_regularly_connect', 'detailed_route', 'group', 'references', 'departure', 'arrival', 'week', 'route', 'departure_date', 'arrival_date', 'bus_id', 'price', 'driver_allowance']
 
 class DispatchOrderWaypointSerializer(serializers.ModelSerializer):
 	class Meta:
@@ -49,9 +55,10 @@ class DispatchOrderConnectSerializer(serializers.ModelSerializer):
 	arrival = serializers.ReadOnlyField(source="order_id.arrival")
 	references = serializers.ReadOnlyField(source="order_id.references")
 	bus_id = serializers.ReadOnlyField(source="bus_id.vehicle_num")
+	check_order_connect = CheckTimeSerializer(read_only=True) # model에 있는 필드 이름이랑 같아야 되는듯?
 	class Meta:
 		model = DispatchOrderConnect
-		fields = ['id', 'order_id', 'references', 'departure', 'arrival', 'departure_date', 'arrival_date', 'bus_id', 'price', 'driver_allowance']
+		fields = ['id', 'order_id', 'check_order_connect', 'references', 'departure', 'arrival', 'departure_date', 'arrival_date', 'bus_id', 'price', 'driver_allowance']
 		# fields = ['order_id', 'departure_date', 'arrival_date', 'bus_id', 'price', 'driver_allowance']
 		
 class DriverCheckSerializer(serializers.ModelSerializer):
