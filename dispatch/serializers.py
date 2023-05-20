@@ -3,12 +3,12 @@ from datetime import datetime
 from rest_framework import serializers
 from django.shortcuts import get_object_or_404
 
-from .models import DispatchOrderWaypoint, DispatchOrder, DispatchRegularly, DispatchRegularlyConnect, DispatchOrderConnect, DriverCheck
+from .models import DispatchOrderWaypoint, DispatchOrder, DispatchRegularly, DispatchRegularlyConnect, DispatchOrderConnect, DriverCheck, ConnectRefusal
 
 class CheckTimeSerializer(serializers.ModelSerializer):
 	class Meta:
 		model = DriverCheck
-		fields = ['wake_time', 'drive_time', 'departure_time']
+		fields = ['wake_time', 'drive_time', 'departure_time', 'connect_check']
 
 class DispatchRegularlySerializer(serializers.ModelSerializer):
 	group = serializers.ReadOnlyField(source="group.name")
@@ -67,11 +67,8 @@ class DriverCheckSerializer(serializers.ModelSerializer):
 		fields = '__all__'
 
 	def validate(self, attrs):
-		regularly_id = self.context['regularly_id']
-		order_id = self.context['order_id']
 		time = self.context['time']
 		check_type = self.context['check_type']
-		user = self.context['user']
 		try:
 			datetime.strptime(time, "%H:%M")
 		except ValueError:
@@ -86,9 +83,7 @@ class DriverCheckSerializer(serializers.ModelSerializer):
 
 	def update(self, instance, validated_data):
 		check_type = self.context['check_type']
-		connect_type = self.context['connect_type']
 		time = self.context['time']
-		connect = self.context['connect']
 
 		if check_type == '기상':
 			instance.wake_time = time
@@ -98,3 +93,21 @@ class DriverCheckSerializer(serializers.ModelSerializer):
 			instance.departure_time = time
 		instance.save()
 		return instance
+
+class ConnectRefusalSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = ConnectRefusal
+		fields = '__all__'
+
+	#def create(self, request, *args, **kwargs):
+	#	check_type = self.context['check_type']
+	#	time = self.context['time']
+
+	#	if check_type == '기상':
+	#		instance.wake_time = time
+	#	elif check_type == '운행':
+	#		instance.drive_time = time
+	#	elif check_type == '출발지':
+	#		instance.departure_time = time
+	#	instance.save()
+	#	return instance

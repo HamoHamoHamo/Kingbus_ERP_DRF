@@ -13,9 +13,10 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
-from trp_drf.settings import DATE_FORMAT
-from .models import DriverCheck, DispatchRegularly, DispatchOrder, DispatchOrderConnect, DispatchRegularlyConnect
-from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, DriverCheckSerializer
+from trp_drf.settings import DATE_FORMAT ,TODAY
+from .models import DriverCheck, DispatchRegularly, DispatchOrder, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal
+from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, DriverCheckSerializer, ConnectRefusalSerializer
+from humanresource.models import Member
 
 class MonthlyDispatches(APIView):
 	def get(self, request, month):
@@ -88,13 +89,8 @@ class DriverCheckView(APIView):
 			return Response("Connect Error", status=status.HTTP_400_BAD_REQUEST)
 
 		serializer = DriverCheckSerializer(driver_check, data=request.data, context={
-			'regularly_id' : request.data['regularly_id'],
-			'order_id' : request.data['order_id'],
 			'time' : request.data['time'],
 			'check_type' : request.data['check_type'],
-			'user' : request.user,
-			'connect' : connect,
-			'connect_type' : connect_type
 		})
 		if serializer.is_valid(raise_exception=True):
 			serializer.save()
@@ -105,3 +101,96 @@ class DriverCheckView(APIView):
 			return Response(response, status=status.HTTP_201_CREATED)
 		else:
 			return Response({"message": "Request Body Error."}, status=status.HTTP_409_CONFLICT)
+
+class ConnectCheckView(APIView):
+	def post(self, request):
+		regularly_id = request.data['regularly_id']
+		order_id = request.data['order_id']
+
+		if ((not regularly_id and not order_id) or regularly_id and order_id):
+			return Response("Connect Error", status=status.HTTP_400_BAD_REQUEST)
+		
+		if regularly_id:
+			connect = get_object_or_404(DispatchRegularlyConnect, id=regularly_id)
+			try:
+				driver_check = DriverCheck.objects.get(regularly_id=connect)
+			except DriverCheck.DoesNotExist:
+				return Response("No DriverCheck Error", status=status.HTTP_400_BAD_REQUEST)
+		elif order_id:
+			connect = get_object_or_404(DispatchOrderConnect, id=order_id)
+			try:
+				driver_check = DriverCheck.objects.get(order_id=connect)
+			except DriverCheck.DoesNotExist:
+				return Response("No DriverCheck", status=status.HTTP_400_BAD_REQUEST)
+		
+		if not connect or connect.driver_id != request.user:
+			return Response("Connect Error", status=status.HTTP_400_BAD_REQUEST)
+
+		if driver_check.connect_check != '':
+			return Response("Already check Error", status=status.HTTP_400_BAD_REQUEST)
+		
+		# 배차 수락하면 return 200
+		if request.data['check'] == 1:
+			driver_check.connect_check = 1
+			driver_check.save()
+			return Response({'success': True}, status=status.HTTP_200_OK)
+
+		driver_check.connect_check = 0
+		driver_check.save()
+		data = request.data.copy()
+		data['driver_id'] = request.user.id
+		data['departure_date'] = connect.departure_date
+		data['arrival_date'] = connect.arrival_date
+		data['check_date'] = TODAY
+		data['creator'] = request.user.id
+		
+		serializer = ConnectRefusalSerializer(data=data)
+		if serializer.is_valid(raise_exception=True):
+			serializer.save()
+			response = {
+				'data' : serializer.data,
+				'success': True,
+			}
+			return Response(response, status=status.HTTP_201_CREATED)
+		else:
+			return Response({"message": "Request Body Error."}, status=status.HTTP_409_CONFLICT)
+
+	
+class ResetConnectCheck(APIView):
+	def post(self, request):
+		regularly_id = request.data['regularly_id']
+		order_id = request.data['order_id']
+
+		if ((not regularly_id and not order_id) or regularly_id and order_id):
+			return Response("Connect Error", status=status.HTTP_400_BAD_REQUEST)
+		
+		if regularly_id:
+			connect = get_object_or_404(DispatchRegularlyConnect, id=regularly_id)
+			try:
+				driver_check = DriverCheck.objects.get(regularly_id=connect)
+			except DriverCheck.DoesNotExist:
+				return Response("No DriverCheck Error", status=status.HTTP_400_BAD_REQUEST)
+			connect_refusal = ConnectRefusal.objects.filter(regularly_id=connect)
+			
+		elif order_id:
+			connect = get_object_or_404(DispatchOrderConnect, id=order_id)
+			try:
+				driver_check = DriverCheck.objects.get(order_id=connect)
+			except DriverCheck.DoesNotExist:
+				return Response("No DriverCheck", status=status.HTTP_400_BAD_REQUEST)
+			connect_refusal = ConnectRefusal.objects.filter(order_id=connect)
+		
+		if not connect or connect.driver_id != request.user:
+			return Response("Connect Error", status=status.HTTP_400_BAD_REQUEST)
+
+		# 확인 끝
+		driver_check.connect_check = ''
+		driver_check.save()
+		response = {
+			'success': True,
+			'delete connect_refusal' : connect_refusal.count(),
+		}
+		if connect_refusal:
+			connect_refusal.delete()
+
+		return Response(response, status=status.HTTP_200_OK)

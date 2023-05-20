@@ -1,11 +1,12 @@
 import os
 import my_settings
-from datetime import timedelta
+from datetime import timedelta, datetime
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DATE_FORMAT = "%Y-%m-%d"
+TODAY = str(datetime.now())[:10]
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.0/howto/deployment/checklist/
@@ -16,8 +17,8 @@ SECRET_KEY = my_settings.SECRET_KEY
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['api.kingbuserp.link', '127.0.0.1']
-CORS_ORIGIN_WHITELIST = ['http://api.kingbuserp.link', 'http://127.0.0.1:8000']
+ALLOWED_HOSTS = ['api.kingbuserp.link', '127.0.0.1', '34.121.50.23']
+CORS_ORIGIN_WHITELIST = ['http://api.kingbuserp.link', 'http://127.0.0.1:8000', 'http://34.121.50.23:8000']
 
 APPEND_SLASH = False
 
