@@ -129,14 +129,13 @@ class ConnectCheckView(APIView):
 		if driver_check.connect_check != '':
 			return Response("Already check Error", status=status.HTTP_400_BAD_REQUEST)
 		
+		print('testtttttttt', type(request.data['check']))
 		# 배차 수락하면 return 200
-		if request.data['check'] == 1:
+		if request.data['check'] == '1':
 			driver_check.connect_check = 1
 			driver_check.save()
 			return Response({'success': True}, status=status.HTTP_200_OK)
 
-		driver_check.connect_check = 0
-		driver_check.save()
 		data = request.data.copy()
 		data['driver_id'] = request.user.id
 		data['departure_date'] = connect.departure_date
@@ -146,6 +145,8 @@ class ConnectCheckView(APIView):
 		
 		serializer = ConnectRefusalSerializer(data=data)
 		if serializer.is_valid(raise_exception=True):
+			driver_check.connect_check = 0
+			driver_check.save()
 			serializer.save()
 			response = {
 				'data' : serializer.data,
