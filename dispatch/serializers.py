@@ -25,14 +25,19 @@ class DispatchRegularlyConnectSerializer(serializers.ModelSerializer):
 	references = serializers.ReadOnlyField(source="regularly_id.references")
 	departure = serializers.ReadOnlyField(source="regularly_id.departure")
 	arrival = serializers.ReadOnlyField(source="regularly_id.arrival")
+	price = serializers.ReadOnlyField(source="regularly_id.price")
+	driver_allowance = serializers.ReadOnlyField(source="regularly_id.driver_allowance")
 	week = serializers.ReadOnlyField(source="regularly_id.week")
+	work_type = serializers.ReadOnlyField(source="regularly_id.work_type")
+	route = serializers.ReadOnlyField(source="regularly_id.route")
+	location = serializers.ReadOnlyField(source="regularly_id.location")
 	detailed_route = serializers.ReadOnlyField(source="regularly_id.detailed_route")
 	bus_id = serializers.ReadOnlyField(source="bus_id.vehicle_num")
 	check_regularly_connect = CheckTimeSerializer(read_only=True)
 
 	class Meta:
 		model = DispatchRegularlyConnect
-		fields = ['id', 'check_regularly_connect', 'detailed_route', 'group', 'references', 'departure', 'arrival', 'week', 'route', 'departure_date', 'arrival_date', 'bus_id', 'price', 'driver_allowance']
+		fields = ['id', 'price', 'driver_allowance', 'work_type', 'route', 'location', 'check_regularly_connect', 'detailed_route', 'group', 'references', 'departure', 'arrival', 'week', 'route', 'departure_date', 'arrival_date', 'bus_id', 'price', 'driver_allowance']
 
 class DispatchOrderWaypointSerializer(serializers.ModelSerializer):
 	class Meta:
@@ -51,6 +56,21 @@ class DispatchOrderSerializer(serializers.ModelSerializer):
 class DispatchOrderConnectSerializer(serializers.ModelSerializer):
 	order_id = DispatchOrderSerializer(many=False)
 	# waypoint = serializers.ReadOnlyField(source="order_id__waypoint")
+	operation_type = serializers.ReadOnlyField(source="order_id.operation_type")
+	bus_type = serializers.ReadOnlyField(source="order_id.bus_type")
+	bus_cnt = serializers.ReadOnlyField(source="order_id.bus_cnt")
+	price = serializers.ReadOnlyField(source="order_id.price")
+	driver_allowance = serializers.ReadOnlyField(source="order_id.driver_allowance")
+	cost_type = serializers.ReadOnlyField(source="order_id.cost_type")
+	customer = serializers.ReadOnlyField(source="order_id.customer")
+	customer_phone = serializers.ReadOnlyField(source="order_id.customer_phone")
+	collection_type = serializers.ReadOnlyField(source="order_id.collection_type")
+	payment_method = serializers.ReadOnlyField(source="order_id.payment_method")
+	VAT = serializers.ReadOnlyField(source="order_id.VAT")
+	option = serializers.ReadOnlyField(source="order_id.option")
+	ticketing_info = serializers.ReadOnlyField(source="order_id.ticketing_info")
+	order_type = serializers.ReadOnlyField(source="order_id.order_type")
+	
 	departure = serializers.ReadOnlyField(source="order_id.departure")
 	arrival = serializers.ReadOnlyField(source="order_id.arrival")
 	references = serializers.ReadOnlyField(source="order_id.references")
@@ -58,7 +78,32 @@ class DispatchOrderConnectSerializer(serializers.ModelSerializer):
 	check_order_connect = CheckTimeSerializer(read_only=True) # model에 있는 필드 이름이랑 같아야 되는듯?
 	class Meta:
 		model = DispatchOrderConnect
-		fields = ['id', 'order_id', 'check_order_connect', 'references', 'departure', 'arrival', 'departure_date', 'arrival_date', 'bus_id', 'price', 'driver_allowance']
+		fields = ['id', 
+	    'operation_type',
+		'bus_type',
+		'bus_cnt',
+		'price',
+		'driver_allowance',
+		'cost_type',
+		'customer',
+		'customer_phone',
+		'collection_type',
+		'payment_method',
+		'VAT',
+		'option',
+		'ticketing_info',
+		'order_type',
+		'order_id', 
+		'check_order_connect', 
+		'references', 
+		'departure', 
+		'arrival', 
+		'departure_date', 
+		'arrival_date', 
+		'bus_id',
+		'price', 
+		'driver_allowance'
+		]
 		# fields = ['order_id', 'departure_date', 'arrival_date', 'bus_id', 'price', 'driver_allowance']
 		
 class DriverCheckSerializer(serializers.ModelSerializer):
