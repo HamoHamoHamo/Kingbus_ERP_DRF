@@ -17,8 +17,11 @@ SECRET_KEY = my_settings.SECRET_KEY
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['api.kingbuserp.link', '127.0.0.1', '34.121.50.23']
-CORS_ORIGIN_WHITELIST = ['http://api.kingbuserp.link', 'http://127.0.0.1:8000', 'http://34.121.50.23:8000']
+
+ALLOWED_HOSTS = my_settings.ALLOWED_HOSTS
+CORS_ORIGIN_WHITELIST = my_settings.CORS_ORIGIN_WHITELIST
+#ALLOWED_HOSTS = ['api.kingbuserp.link', '127.0.0.1', '34.121.50.23']
+#CORS_ORIGIN_WHITELIST = ['http://api.kingbuserp.link', 'http://127.0.0.1:8000', 'http://34.121.50.23:8000']
 
 APPEND_SLASH = False
 
