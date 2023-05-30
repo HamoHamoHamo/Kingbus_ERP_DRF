@@ -112,12 +112,14 @@ class ConnectCheckView(APIView):
 		
 		if regularly_id:
 			connect = get_object_or_404(DispatchRegularlyConnect, id=regularly_id)
+			route = connect.regularly_id.route
 			try:
 				driver_check = DriverCheck.objects.get(regularly_id=connect)
 			except DriverCheck.DoesNotExist:
 				return Response("No DriverCheck Error", status=status.HTTP_400_BAD_REQUEST)
 		elif order_id:
 			connect = get_object_or_404(DispatchOrderConnect, id=order_id)
+			route = connect.order_id.route
 			try:
 				driver_check = DriverCheck.objects.get(order_id=connect)
 			except DriverCheck.DoesNotExist:
@@ -129,7 +131,6 @@ class ConnectCheckView(APIView):
 		if driver_check.connect_check != '':
 			return Response("Already check Error", status=status.HTTP_400_BAD_REQUEST)
 		
-		print('testtttttttt', type(request.data['check']))
 		# 배차 수락하면 return 200
 		if request.data['check'] == '1':
 			driver_check.connect_check = 1
@@ -142,6 +143,7 @@ class ConnectCheckView(APIView):
 		data['arrival_date'] = connect.arrival_date
 		data['check_date'] = TODAY
 		data['creator'] = request.user.id
+		data['route'] = route
 		
 		serializer = ConnectRefusalSerializer(data=data)
 		if serializer.is_valid(raise_exception=True):
