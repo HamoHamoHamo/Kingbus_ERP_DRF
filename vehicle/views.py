@@ -1,3 +1,19 @@
-from django.shortcuts import render
+from django.core import serializers
+from django.shortcuts import get_object_or_404
+from django.http import Http404, JsonResponse
+from rest_framework import status
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from .models import Vehicle
+from humanresource.models import Member
 
-# Create your views here.
+class VehicleListView(APIView):
+    def get(self, request):
+        response = {}
+        response['driver_vehicle_list'] = Vehicle.objects.filter(use='사용').filter(driver_id=request.user.id).values('id', 'vehicle_num')
+        #response['driver_vehicle_list'] = serializers.serialize('json', driver_vehicle)
+        response['vehicle_list'] = Vehicle.objects.filter(use='사용').exclude(driver_id=request.user.id).values('id', 'vehicle_num')
+        #response['vehicle_list'] = serializers.serialize('json', vehicle_list)
+
+        return Response(response, status=status.HTTP_200_OK)
+       

@@ -1,11 +1,7 @@
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
-from django import dispatch
 from django.shortcuts import get_object_or_404
-from django.core.exceptions import ObjectDoesNotExist
 from django.http import Http404, JsonResponse
-
-from rest_framework_simplejwt.views import TokenRefreshView
 
 from rest_framework import status
 from rest_framework.views import APIView
