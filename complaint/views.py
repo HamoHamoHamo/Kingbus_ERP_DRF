@@ -3,21 +3,26 @@ from dateutil.relativedelta import relativedelta
 from django.shortcuts import get_object_or_404
 from django.http import Http404, JsonResponse
 from rest_framework import status
+from rest_framework.generics import ListAPIView
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from trp_drf.settings import DATE_FORMAT ,TODAY
+from trp_drf.pagination import Pagination
 from .models import Consulting, VehicleInspectionRequest, InspectionRequestFile, ConsultingFile
 from .serializers import ConsultingSerializer, VehicleInspectionRequestSerializer
 from humanresource.models import Member
 from vehicle.models import Vehicle
 
-class ConsultingView(APIView):
-    def get(self, request):
-        consulting_list = Consulting.objects.filter(member_id=request.user.id).order_by('-pub_date')
-        response = ConsultingSerializer(consulting_list, many=True).data
-        return Response(response, status=status.HTTP_200_OK)
+class ConsultingView(ListAPIView):
+    serializer_class = ConsultingSerializer
+    pagination_class = Pagination
+
+    def get_queryset(self):
+        consulting_list = Consulting.objects.filter(member_id=self.request.user.id).order_by('-pub_date')
+        return consulting_list
+    
     def post(self, request):
         files = request.FILES.getlist('files')
         data = {
@@ -51,11 +56,13 @@ def consulting_file_save(upload_files, consulting):
         consulting_file.save()
     return
 
-class InspectionView(APIView):
-    def get(self, request):
-        inspection_list = VehicleInspectionRequest.objects.filter(member_id=request.user.id).select_related('vehicle_id', 'check_member_id').order_by('-pub_date')
-        response = VehicleInspectionRequestSerializer(inspection_list, many=True).data
-        return Response(response, status=status.HTTP_200_OK)
+class InspectionView(ListAPIView):
+    serializer_class = VehicleInspectionRequestSerializer
+    pagination_class = Pagination
+
+    def get_queryset(self):
+        inspection_list = VehicleInspectionRequest.objects.filter(member_id=self.request.user.id).select_related('vehicle_id', 'check_member_id').order_by('-pub_date')
+        return inspection_list
     def post(self, request):
         files = request.FILES.getlist('files')
         data = {
