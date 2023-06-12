@@ -2,11 +2,17 @@ from datetime import datetime
 from rest_framework import serializers
 from django.shortcuts import get_object_or_404
 
-from .models import Consulting, VehicleInspectionRequest, InspectionRequestFile
+from .models import Consulting, VehicleInspectionRequest, InspectionRequestFile, ConsultingFile
 from vehicle.models import Vehicle
 from humanresource.models import Member
 
+class ConsultingFileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ConsultingFile
+        fields = ['file', 'filename']
+
 class ConsultingSerializer(serializers.ModelSerializer):
+    consulting_file = ConsultingFileSerializer(many=True, required=False)
     #check_member_id = serializers.ReadOnlyField(source="check_member_id.name")
     
     # field = '__all__'로 쓰면 def get_(field명) 함수가 실행이 안됨
