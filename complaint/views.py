@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from trp_drf.settings import DATE_FORMAT ,TODAY
-from .models import Consulting, VehicleInspectionRequest, InspectionRequestFile
+from .models import Consulting, VehicleInspectionRequest, InspectionRequestFile, ConsultingFile
 from .serializers import ConsultingSerializer, VehicleInspectionRequestSerializer
 from humanresource.models import Member
 from vehicle.models import Vehicle
@@ -19,6 +19,7 @@ class ConsultingView(APIView):
         response = ConsultingSerializer(consulting_list, many=True).data
         return Response(response, status=status.HTTP_200_OK)
     def post(self, request):
+        files = request.FILES.getlist('files')
         data = {
             'member_id' : request.user.id,
             'content' : request.data['content'],
@@ -27,14 +28,28 @@ class ConsultingView(APIView):
         }
         serializer = ConsultingSerializer(data=data)
         if serializer.is_valid(raise_exception=True):
-            serializer.save()
-            response = {
-				'data' : serializer.data,
-				'success': True,
-			}
-            return Response(response, status=status.HTTP_201_CREATED)
+            consulting = serializer.save()
+            try:
+                consulting_file_save(files, consulting)
+                response = {
+                    'data' : serializer.data,
+                    'success': True,
+                }
+                return Response(response, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                return Response({"error": f'{e}', "message": "File Save Error."}, status=status.HTTP_409_CONFLICT)
         else:
             return Response({"message": "Request Body Error."}, status=status.HTTP_409_CONFLICT)
+
+def consulting_file_save(upload_files, consulting):
+    for file in upload_files:
+        consulting_file = ConsultingFile(
+            consulting_id=consulting,
+            file=file,
+            filename=file.name,
+        )
+        consulting_file.save()
+    return
 
 class InspectionView(APIView):
     def get(self, request):

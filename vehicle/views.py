@@ -10,10 +10,7 @@ from humanresource.models import Member
 class VehicleListView(APIView):
     def get(self, request):
         response = {}
-        response['driver_vehicle_list'] = Vehicle.objects.filter(use='사용').filter(driver_id=request.user.id).values('id', 'vehicle_num')
-        #response['driver_vehicle_list'] = serializers.serialize('json', driver_vehicle)
-        response['vehicle_list'] = Vehicle.objects.filter(use='사용').exclude(driver_id=request.user.id).values('id', 'vehicle_num')
-        #response['vehicle_list'] = serializers.serialize('json', vehicle_list)
-
+        response['driver_vehicle_list'] = Vehicle.objects.filter(use='사용').filter(driver_id=request.user.id).values('id', 'vehicle_num0', 'vehicle_num')
+        response['vehicle_list'] = Vehicle.objects.filter(use='사용').exclude(driver_id=request.user.id).values('id', 'vehicle_num0', 'vehicle_num')
         return Response(response, status=status.HTTP_200_OK)
        
