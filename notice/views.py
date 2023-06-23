@@ -18,7 +18,7 @@ class NoticeListView(ListAPIView):
 class NoticeDetailView(APIView):
     def get(self, request, id):
         queryset = get_object_or_404(Notice, id=id)
-        response = NoticeSerializer(queryset).data
+        response = NoticeSerializer(queryset, context={'request': request}).data
         return Response(response, status=status.HTTP_200_OK)
     
 class CommentView(APIView):
