@@ -12,12 +12,18 @@ class NoticeFileSerializer(serializers.ModelSerializer):
 		fields = ['file', 'filename']
 
 class NoticeCommentSerializer(serializers.ModelSerializer):
+	can_delete = serializers.ReadOnlyField()
 	class Meta:
 		model = NoticeComment
-		fields = ['content', 'creator', 'pub_date']
+		fields = ['content', 'creator', 'can_delete', 'pub_date']
 	
+	# def get_can_delete(self, obj):
+	# 	return 1 if self.request.user == self.creator else 0
+		
+
 	def to_representation(self, instance):
 		representation = super().to_representation(instance)
+		representation['can_delete'] = 1 if self.context['request'].user.id == representation['creator'] else 0
 		representation['creator'] = Member.objects.get(id=representation['creator']).name if representation['creator'] else None
 		representation['pub_date'] = str(representation['pub_date'])[:16].replace('T', ' ')
 		return representation
