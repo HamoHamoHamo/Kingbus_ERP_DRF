@@ -3,12 +3,19 @@ from datetime import datetime
 from rest_framework import serializers
 from django.shortcuts import get_object_or_404
 
-from .models import DispatchOrderWaypoint, DispatchOrder, DispatchRegularly, DispatchRegularlyConnect, DispatchOrderConnect, DriverCheck, ConnectRefusal
+from .models import DispatchOrderWaypoint, DispatchOrder, DispatchRegularly, \
+	DispatchRegularlyConnect, DispatchOrderConnect, DriverCheck, ConnectRefusal, \
+	DispatchRegularlyWaypoint
 
 class CheckTimeSerializer(serializers.ModelSerializer):
 	class Meta:
 		model = DriverCheck
 		fields = ['wake_time', 'drive_time', 'departure_time', 'connect_check']
+
+class DispatchRegularlyWaypointSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = DispatchRegularlyWaypoint
+		fields = ['waypoint']
 
 class DispatchRegularlySerializer(serializers.ModelSerializer):
 	group = serializers.ReadOnlyField(source="group.name")
@@ -32,12 +39,14 @@ class DispatchRegularlyConnectSerializer(serializers.ModelSerializer):
 	route = serializers.ReadOnlyField(source="regularly_id.route")
 	location = serializers.ReadOnlyField(source="regularly_id.location")
 	detailed_route = serializers.ReadOnlyField(source="regularly_id.detailed_route")
+	maplink = serializers.ReadOnlyField(source="regularly_id.maplink")
 	bus_id = serializers.ReadOnlyField(source="bus_id.vehicle_num")
 	check_regularly_connect = CheckTimeSerializer(read_only=True)
+	waypoint = DispatchRegularlyWaypointSerializer(many=True, source="regularly_id.regularly_id.regularly_waypoint")
 
 	class Meta:
 		model = DispatchRegularlyConnect
-		fields = ['id', 'price', 'driver_allowance', 'work_type', 'route', 'location', 'check_regularly_connect', 'detailed_route', 'group', 'references', 'departure', 'arrival', 'week', 'route', 'departure_date', 'arrival_date', 'bus_id', 'price', 'driver_allowance']
+		fields = ['id', 'price', 'driver_allowance', 'work_type', 'route', 'location', 'check_regularly_connect', 'detailed_route', 'maplink', 'group', 'references', 'departure', 'arrival', 'week', 'route', 'departure_date', 'arrival_date', 'bus_id', 'price', 'driver_allowance', 'waypoint']
 
 class DispatchOrderWaypointSerializer(serializers.ModelSerializer):
 	class Meta:
@@ -54,7 +63,7 @@ class DispatchOrderSerializer(serializers.ModelSerializer):
 		fields = ['waypoint']
 
 class DispatchOrderConnectSerializer(serializers.ModelSerializer):
-	order_id = DispatchOrderSerializer(many=False)
+	waypoint = DispatchOrderWaypointSerializer(many=True, source="order_id.waypoint")
 	# waypoint = serializers.ReadOnlyField(source="order_id__waypoint")
 	operation_type = serializers.ReadOnlyField(source="order_id.operation_type")
 	bus_type = serializers.ReadOnlyField(source="order_id.bus_type")
@@ -93,7 +102,7 @@ class DispatchOrderConnectSerializer(serializers.ModelSerializer):
 		'option',
 		'ticketing_info',
 		'order_type',
-		'order_id', 
+		'waypoint', 
 		'check_order_connect', 
 		'references', 
 		'departure', 
