@@ -15,7 +15,7 @@ class NoticeCommentSerializer(serializers.ModelSerializer):
 	can_delete = serializers.ReadOnlyField()
 	class Meta:
 		model = NoticeComment
-		fields = ['content', 'creator', 'can_delete', 'pub_date']
+		fields = ['id', 'content', 'creator', 'can_delete', 'pub_date']
 	
 	# def get_can_delete(self, obj):
 	# 	return 1 if self.request.user == self.creator else 0
