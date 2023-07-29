@@ -9,7 +9,7 @@ from django.contrib.auth.hashers import check_password
 from .models import Member
 
 class UserLoginSerializer(serializers.Serializer):
-    user_id = serializers.CharField(max_length=32)
+    user_id = serializers.CharField(max_length=100)
     password = serializers.CharField(max_length=128, write_only=True)
     
     access = serializers.CharField(read_only=True)

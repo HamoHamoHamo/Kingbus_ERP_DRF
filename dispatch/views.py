@@ -21,15 +21,22 @@ from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnec
 
 class MonthlyDispatches(APIView):
 	def get(self, request, month):
-		if not month or len(month) != 7:
-			return Response("날짜를 정확하게 입력하세요", status=status.HTTP_400_BAD_REQUEST)
+		try:
+			last_day = datetime.strftime(datetime.strptime(f'{month}-01', DATE_FORMAT) + relativedelta(months=1) - timedelta(days=1), DATE_FORMAT)[8:]
+		except ValueError:
+			response = {
+				'result' : 'false',
+				'data' : 1,
+				'message' : {
+					'date' : '날짜를 정확하게 입력하세요'
+				}
+			}
+			return Response(response, status=status.HTTP_400_BAD_REQUEST)
 		user = request.user
 
-		last_day = datetime.strftime(datetime.strptime(f'{month}-01', DATE_FORMAT) + relativedelta(months=1) - timedelta(days=1), DATE_FORMAT)[8:]
 		order = [0] * int(last_day)
 		regularly_c = [0] * int(last_day)
 		regularly_t = [0] * int(last_day)
-		response = {}
 
 		regularly_list = DispatchRegularlyConnect.objects.filter(departure_date__startswith=month).filter(driver_id=user)
 		order_list = DispatchOrderConnect.objects.filter(departure_date__startswith=month).filter(driver_id=user)
@@ -44,16 +51,31 @@ class MonthlyDispatches(APIView):
 		for o in order_list:
 			date = int(o.departure_date[8:10])
 			order[date-1] += 1
-		response['order'] = order
-		response['regularly_c'] = regularly_c
-		response['regularly_t'] = regularly_t
+		response = {
+			'result' : 'true',
+			'data' : {
+				'order' : order,
+				'regularly_c' : regularly_c,
+				'regularly_t' : regularly_t,
+			},
+			'message' : '',
+		}
 		return Response(response, status=status.HTTP_200_OK)
 
 class DailyDispatches(APIView):
 	permission_classes = (IsAuthenticated,)
 	def get(self, request, date):
-		if not date or len(date) != 10:
-			return Response("날짜를 정확하게 입력하세요", status=status.HTTP_400_BAD_REQUEST)
+		try:
+			datetime.strptime(date, DATE_FORMAT)
+		except ValueError:
+			response = {
+				'result' : 'false',
+				'data' : 1,
+				'message' : {
+					'date' : '날짜를 정확하게 입력하세요'
+				}
+			}
+			return Response(response, status=status.HTTP_400_BAD_REQUEST)
 
 		user = request.user
 		r_connects = DispatchRegularlyConnect.objects.prefetch_related('check_regularly_connect').select_related('regularly_id').filter(departure_date__startswith=date).filter(driver_id=user)
@@ -61,47 +83,74 @@ class DailyDispatches(APIView):
 		res = {}
 		res['regularly'] = DispatchRegularlyConnectSerializer(r_connects, many=True).data
 		res['order'] = DispatchOrderConnectSerializer(connects, many=True).data
-		return Response(res, status=status.HTTP_200_OK)
+		response = {
+			'result' : 'true',
+			'data' : res,
+			'message' : '',
+		}
+		return Response(response, status=status.HTTP_200_OK)
 
 class DriverCheckView(APIView):
 	def patch(self, request):
 		regularly_id = request.data['regularly_id']
 		order_id = request.data['order_id']
 
+		e_response = {
+			'result': 'false',
+		}
 		if ((not regularly_id and not order_id) or regularly_id and order_id):
-			return Response("Connect Error", status=status.HTTP_400_BAD_REQUEST)
+			e_response['data'] = '1'
+			e_response['message'] = {'connect': 'regularly_id, order_id 둘 중에 하나만 입력해주세요'}
+			return Response(e_response, status=status.HTTP_400_BAD_REQUEST)
 		
 		if regularly_id:
-			connect_type = "regularly"
-			connect = get_object_or_404(DispatchRegularlyConnect, id=regularly_id)
+			try:
+				connect = DispatchRegularlyConnect.objects.get(id=regularly_id)
+			except DispatchRegularlyConnect.DoesNotExist:
+				e_response['data'] = '2'
+				e_response['message'] = {'regularly_id': 'Invalid regulalry_id'}
+				return Response(e_response, status=status.HTTP_400_BAD_REQUEST)
 			try:
 				driver_check = DriverCheck.objects.get(regularly_id=connect)
 			except DriverCheck.DoesNotExist:
-				return Response("No DriverCheck Error", status=status.HTTP_400_BAD_REQUEST)
+				e_response['data'] = '2'
+				e_response['message'] = {'driver_check': 'DriverCheck does not exist'}
+				return Response(e_response, status=status.HTTP_400_BAD_REQUEST)
 		elif order_id:
-			connect_type = "order"
-			connect = get_object_or_404(DispatchOrderConnect, id=order_id)
+			try:
+				connect = DispatchOrderConnect.objects.get(id=order_id)
+			except DispatchOrderConnect.DoesNotExist:
+				e_response['data'] = '2'
+				e_response['message'] = {'order_id': 'Invalid order_id'}
+				return Response(e_response, status=status.HTTP_400_BAD_REQUEST)
 			try:
 				driver_check = DriverCheck.objects.get(order_id=connect)
 			except DriverCheck.DoesNotExist:
-				return Response("No DriverCheck", status=status.HTTP_400_BAD_REQUEST)
+				e_response['data'] = '2'
+				e_response['message'] = {'driver_check': 'DriverCheck does not exist'}
+				return Response(e_response, status=status.HTTP_400_BAD_REQUEST)
 		
-		if not connect or connect.driver_id != request.user:
-			return Response("Connect Error", status=status.HTTP_400_BAD_REQUEST)
+		if connect.driver_id != request.user:
+			e_response['data'] = '3'
+			e_response['message'] = {'user': 'Invalid user'}
+			return Response(e_response, status=status.HTTP_401_UNAUTHORIZED)
 
 		serializer = DriverCheckSerializer(driver_check, data=request.data, context={
 			'time' : request.data['time'],
 			'check_type' : request.data['check_type'],
 		})
-		if serializer.is_valid(raise_exception=True):
+		if serializer.is_valid(raise_exception=False):
 			serializer.save()
 			response = {
-				'success': True,
-				'statusCode': status.HTTP_201_CREATED,
+				'result': 'true',
+				'data': serializer.data,
+				'message': '',
 			}
 			return Response(response, status=status.HTTP_201_CREATED)
 		else:
-			return Response({"message": "Request Body Error."}, status=status.HTTP_409_CONFLICT)
+			e_response['data'] = '1'
+			e_response['message'] = serializer.errors
+			return Response(e_response, status=status.HTTP_400_BAD_REQUEST)
 
 class ConnectCheckView(APIView):
 	def post(self, request):
