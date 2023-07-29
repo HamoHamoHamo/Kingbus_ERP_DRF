@@ -126,12 +126,12 @@ class DriverCheckSerializer(serializers.ModelSerializer):
 		try:
 			datetime.strptime(time, "%H:%M")
 		except ValueError:
-			raise serializers.ValidationError("Time Format Error")
+			raise serializers.ValidationError("Invalid time format")
 		# 종류3개중 어느것도 아닐때
 		if check_type != '기상' and check_type != '운행' and check_type != '출발지': 
-			raise serializers.ValidationError("Bad Request. Type Error")
+			raise serializers.ValidationError("Invalid Type")
 		if not attrs['regularly_id'] and not attrs['order_id']:
-			raise serializers.ValidationError("Bad Request. Connect Error")
+			raise serializers.ValidationError("No regularly_id and order_id")
 		
 		return attrs
 

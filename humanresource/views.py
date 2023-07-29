@@ -1,9 +1,9 @@
 from django import dispatch
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import ObjectDoesNotExist
-
+from rest_framework_simplejwt import views as jwt_views
 from rest_framework_simplejwt.views import TokenRefreshView
-
+from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -31,22 +31,57 @@ class UserLoginView(APIView):
 
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
-        valid = serializer.is_valid(raise_exception=True)
+        valid = serializer.is_valid(raise_exception=False)
 
         if valid:
             status_code = status.HTTP_200_OK
-
             response = {
-                'success': True,
-                'statusCode': status_code,
-                'message': 'User logged in successfully',
-                'access': serializer.validated_data['access'],
-                'refresh': serializer.validated_data['refresh'],
-                'authenticatedUser': {
-                    'user_id': serializer.validated_data['user_id'],
-                    #name 추가
-                    'name': serializer.validated_data['name'],
-                    'role': serializer.validated_data['role']
-                }
+                'result' : 'true',
+                'data' : {
+                    'access': serializer.validated_data['access'],
+                    'refresh': serializer.validated_data['refresh'],
+                    'authenticatedUser': {
+                        'user_id': serializer.validated_data['user_id'],
+                        #name 추가
+                        'name': serializer.validated_data['name'],
+                        'role': serializer.validated_data['role']
+                    }
+                },
+                'message': '',
             }
             return Response(response, status=status_code)
+        data = 1 if 'non_field_errors' in serializer.errors else 2
+        sta = status.HTTP_200_OK if 'non_field_errors' in serializer.errors else status.HTTP_400_BAD_REQUEST
+        response = {
+            'result' : 'false',
+            'data' : data,
+            'message': serializer.errors,
+        }
+        return Response(response, status=sta)
+
+class TokenRefreshView(jwt_views.TokenRefreshView):
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+
+        try:
+            serializer.is_valid(raise_exception=False)
+        except TokenError as e:
+            return Response({
+                'result' : 'false',
+                'data' : 1,
+                'message' : {"token" : ["Token is invalid or expired"]},
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        if serializer.is_valid(raise_exception=False):
+            response = {
+                'result' : 'true',
+                'data' : serializer.validated_data,
+                'message' : '',
+            }
+            return Response(response, status=status.HTTP_200_OK)
+        else:
+            response = {
+                'result' : 'false',
+                'data' : 2,
+                'message' : serializer.errors,
+            }
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
