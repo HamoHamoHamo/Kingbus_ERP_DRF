@@ -1,18 +1,23 @@
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.http import Http404, JsonResponse
 
 from rest_framework import status
-from rest_framework.views import APIView
-from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.generics import ListAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
 
 from trp_drf.settings import DATE_FORMAT ,TODAY
-from .models import DriverCheck, DispatchRegularly, DispatchOrder, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal
-from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, DriverCheckSerializer, ConnectRefusalSerializer
-from humanresource.models import Member
+from trp_drf.pagination import Pagination
+from .models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow
+from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, \
+	DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, \
+	DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer
 
 class MonthlyDispatches(APIView):
 	def get(self, request, month):
@@ -202,8 +207,140 @@ class ConnectCheckView(APIView):
 			return Response(response, status=status.HTTP_201_CREATED)
 		else:
 			return Response({"message": "Request Body Error."}, status=status.HTTP_409_CONFLICT)
+    
+class RegularlyList(ListAPIView):
+	serializer_class = DispatchRegularlyDataSerializer
+	pagination_class = Pagination
 
-	
+	def get_queryset(self):
+		group_id = self.request.GET.get('group', '')
+		search = self.request.GET.get('search', '')
+
+		if not group_id:
+			group = RegularlyGroup.objects.order_by('number').first()
+			return DispatchRegularlyData.objects.filter(group=group).filter(Q(route__contains=search) | Q(departure__contains=search) | Q(arrival__contains=search)).filter(use='사용').order_by('num1', 'number1', 'num2', 'number2')
+		else:
+			group = get_object_or_404(RegularlyGroup, id=group_id)
+			return DispatchRegularlyData.objects.filter(group=group).filter(Q(route__contains=search) | Q(departure__contains=search) | Q(arrival__contains=search)).filter(use='사용').order_by('num1', 'number1', 'num2', 'number2')
+
+	def list(self, request, *args, **kwargs):
+		response = super().list(request, *args, **kwargs)
+		data = {
+		    'result': 'true',
+		    'data': {
+			    'count': response.data['count'],
+			    'next': response.data['next'],
+				'previous': response.data['previous'],
+			    'regularly_list': response.data['results'],
+			},
+		    'message': '',
+		}
+		return Response(data)
+
+	def handle_exception(self, exc):
+		return Response({
+                'result': 'false',
+				'data' : 1,
+                'message': {
+					'detail': str(exc),
+				},
+            }, status=400)
+
+class RegularlyGroupList(ListAPIView):
+	queryset = RegularlyGroup.objects.all().order_by('number')
+	serializer_class = DispatchRegularlyGroupSerializer
+
+	def list(self, request, *args, **kwargs):
+		response = super().list(request, *args, **kwargs)
+		data = {
+		    'result': 'true',
+		    'data': {
+			    'group_list': response.data['results'],
+			},
+		    'message': '',
+		}
+		return Response(data)
+
+	def handle_exception(self, exc):
+		return Response({
+                'result': 'false',
+				'data' : 1,
+                'message': {
+					'detail': str(exc),
+				},
+            }, status=400)
+
+class RegularlyKnow(APIView):
+	def post(self, request):
+		data = request.data.copy()
+		data['regularly_id'] = request.data['regularly_id']
+		if 'driver_id' in request.data:
+			data['driver_id'] = request.data['driver_id']
+		else:
+			data['driver_id'] = request.user.id
+		data['creator'] = request.user.id
+
+		if DispatchRegularlyRouteKnow.objects.filter(driver_id=data['driver_id']).filter(regularly_id=data['regularly_id']).exists():
+			response = {
+				'result': 'false',
+				'data': 2,
+				'message': {
+					'detail': '이미 생성한 노선숙지입니다'
+				},
+			}
+			return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+		serializer = RegularlyKnowSerializer(data=data)
+		if serializer.is_valid(raise_exception=False):
+			serializer.save()
+			response = {
+				'result': 'true',
+				'data': serializer.data,
+				'message': '',
+			}
+			return Response(response, status=status.HTTP_201_CREATED)
+		else:
+			response = {
+					'result': 'false',
+					'data': '1',
+					'message': serializer.errors,
+				}
+			return Response(response, status=status.HTTP_400_BAD_REQUEST)
+		
+	def delete(self, request):
+		data = {
+			'regularly_id' : request.data['regularly_id'],
+			'driver_id' : request.data['driver_id'] if 'driver_id' in request.data else request.user.id
+		}
+		
+		serializer = RegularlyKnowSerializer(data=data)
+		if not serializer.is_valid(raise_exception=False):
+			response = {
+					'result': 'false',
+					'data': '1',
+					'message': serializer.errors
+				}
+			return Response(response, status=status.HTTP_400_BAD_REQUEST)
+		route_know = DispatchRegularlyRouteKnow.objects.filter(regularly_id=data['regularly_id']).filter(driver_id=data['driver_id'])
+		if route_know:
+			route_know.delete()
+			response = {
+				'result': 'true',
+				'data': route_know,
+				'message': '',
+			}
+			return Response(response, status=status.HTTP_200_OK)
+		else:
+			response = {
+					'result': 'false',
+					'data': '1',
+					'message': {
+						'regularly_id': '노선숙지가 없습니다'
+					},
+				}
+			return Response(response, status=status.HTTP_400_BAD_REQUEST)
+		
+
 class ResetConnectCheck(APIView):
 	def post(self, request):
 		regularly_id = request.data['regularly_id']
