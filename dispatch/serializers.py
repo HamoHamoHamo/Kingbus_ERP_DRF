@@ -5,7 +5,8 @@ from django.shortcuts import get_object_or_404
 
 from .models import DispatchOrderWaypoint, DispatchOrder, DispatchRegularly, \
 	DispatchRegularlyConnect, DispatchOrderConnect, DriverCheck, ConnectRefusal, \
-	DispatchRegularlyWaypoint
+	DispatchRegularlyWaypoint, DispatchRegularlyRouteKnow, DispatchRegularlyData, \
+	RegularlyGroup
 
 class CheckTimeSerializer(serializers.ModelSerializer):
 	class Meta:
@@ -165,3 +166,25 @@ class ConnectRefusalSerializer(serializers.ModelSerializer):
 	#		instance.departure_time = time
 	#	instance.save()
 	#	return instance
+
+class RegularlyKnowSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = DispatchRegularlyRouteKnow
+		fields = '__all__'
+
+
+class DispatchRegularlyDataSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = DispatchRegularlyData
+		fields = '__all__'
+
+	def to_representation(self, instance):
+		representation = super().to_representation(instance)
+		representation['group'] = RegularlyGroup.objects.get(id=representation['group']).name if representation['group'] else None
+		
+		return representation
+
+class DispatchRegularlyGroupSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = RegularlyGroup
+		fields = ['id', 'name']
