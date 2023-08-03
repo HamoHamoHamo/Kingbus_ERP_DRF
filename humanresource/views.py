@@ -50,3 +50,26 @@ class UserLoginView(APIView):
                 }
             }
             return Response(response, status=status_code)
+
+class Notification(APIView):
+    def patch(self, request):
+        try:
+            user = request.user
+            token = request.data['token']
+            user.token = token
+            user.save()
+            return Response({
+                'result': 'true',
+                'data': {
+                    'token': user.token
+                },
+                'message': ''
+            })
+        except Exception as e:
+            return Response({
+                'result': 'false',
+                'data': 1,
+                'message': {
+                    'detail': str(e)
+                }
+            })
