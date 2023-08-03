@@ -59,6 +59,31 @@ class UserLoginView(APIView):
         }
         return Response(response, status=sta)
 
+
+class Notification(APIView):
+    def patch(self, request):
+        try:
+            user = request.user
+            token = request.data['token']
+            user.token = token
+            user.save()
+            return Response({
+                'result': 'true',
+                'data': {
+                    'token': user.token
+                },
+                'message': ''
+            })
+        except Exception as e:
+            return Response({
+                'result': 'false',
+                'data': 1,
+                'message': {
+                    'detail': str(e)
+                }
+            })
+
+
 class TokenRefreshView(jwt_views.TokenRefreshView):
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

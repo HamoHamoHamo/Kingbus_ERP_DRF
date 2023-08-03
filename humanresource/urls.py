@@ -8,7 +8,7 @@ urlpatterns = [
     path('login', views.UserLoginView.as_view()),
     # path('drivers/login/', views.DriverLoginView.as_view()),
     # path('companys/login/', views.CompanyLoginView.as_view()),
-
+    path('notification', views.Notification.as_view()),
 
 
     # path('token/obtain', jwt_views.TokenObtainPairView.as_view(), name='token_create'),  # override sjwt stock token
