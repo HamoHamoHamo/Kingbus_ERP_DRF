@@ -174,15 +174,18 @@ class RegularlyKnowSerializer(serializers.ModelSerializer):
 
 
 class DispatchRegularlyDataSerializer(serializers.ModelSerializer):
+	know = serializers.SerializerMethodField()
+
 	class Meta:
 		model = DispatchRegularlyData
 		fields = '__all__'
 
-	def to_representation(self, instance):
-		representation = super().to_representation(instance)
-		representation['group'] = RegularlyGroup.objects.get(id=representation['group']).name if representation['group'] else None
-		
-		return representation
+	def get_know(self, obj):
+		user_id = self.context.get('user_id')
+		if obj.regularly_route_know.filter(driver_id=user_id).exists():
+			return 'true'
+		else:
+			return 'false'
 
 class DispatchRegularlyGroupSerializer(serializers.ModelSerializer):
 	class Meta:
