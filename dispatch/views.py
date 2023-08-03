@@ -174,6 +174,11 @@ class RegularlyList(ListAPIView):
 			group = get_object_or_404(RegularlyGroup, id=group_id)
 			return DispatchRegularlyData.objects.filter(group=group).filter(Q(route__contains=search) | Q(departure__contains=search) | Q(arrival__contains=search)).filter(use='사용').order_by('num1', 'number1', 'num2', 'number2')
 
+	def get_serializer_context(self):
+		context = super().get_serializer_context()
+		context['user_id'] = self.request.user.id
+		return context
+
 	def list(self, request, *args, **kwargs):
 		response = super().list(request, *args, **kwargs)
 		data = {
@@ -190,12 +195,12 @@ class RegularlyList(ListAPIView):
 
 	def handle_exception(self, exc):
 		return Response({
-                'result': 'false',
-				'data' : 1,
-                'message': {
-					'detail': str(exc),
-				},
-            }, status=400)
+			'result': 'false',
+			'data' : 1,
+			'message': {
+				'detail': str(exc),
+			},
+		}, status=400)
 
 class RegularlyGroupList(ListAPIView):
 	queryset = RegularlyGroup.objects.all().order_by('number')
