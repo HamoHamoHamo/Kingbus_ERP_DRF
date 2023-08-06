@@ -187,6 +187,12 @@ class DispatchRegularlyDataSerializer(serializers.ModelSerializer):
 		else:
 			return 'false'
 
+	def to_representation(self, instance):
+		representation = super().to_representation(instance)
+		representation['group'] = RegularlyGroup.objects.get(id=representation['group']).name if representation['group'] else None
+
+		return representation
+
 class DispatchRegularlyGroupSerializer(serializers.ModelSerializer):
 	class Meta:
 		model = RegularlyGroup
