@@ -9,7 +9,7 @@ urlpatterns = [
     # path('drivers/login/', views.DriverLoginView.as_view()),
     # path('companys/login/', views.CompanyLoginView.as_view()),
     path('notification', views.Notification.as_view()),
-
+    path('maintenance', views.MaintenanceView.as_view()),
 
     # path('token/obtain', jwt_views.TokenObtainPairView.as_view(), name='token_create'),  # override sjwt stock token
     #path('logout', jwt_views.TokenBlacklistView.as_view(), name='logout'),

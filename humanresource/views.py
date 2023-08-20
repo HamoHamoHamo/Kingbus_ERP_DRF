@@ -83,6 +83,25 @@ class Notification(APIView):
                 }
             })
 
+class MaintenanceView(APIView):
+    permission_classes = (AllowAny,)
+
+    def get(self, request):
+        try:
+            res = {
+                'result' : 'true',
+                'data' : 'y',
+                'message' : ''
+            }
+        except Exception as e:
+            res = {
+                'result' : 'false',
+                'data' : 1,
+                'message' : {
+                    'error' : str(e)
+                }
+            }
+        return Response(res, status=status.HTTP_200_OK)
 
 class TokenRefreshView(jwt_views.TokenRefreshView):
     def post(self, request, *args, **kwargs):
