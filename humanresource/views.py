@@ -59,6 +59,50 @@ class UserLoginView(APIView):
         }
         return Response(response, status=sta)
 
+
+class Notification(APIView):
+    def patch(self, request):
+        try:
+            user = request.user
+            token = request.data['token']
+            user.token = token
+            user.save()
+            return Response({
+                'result': 'true',
+                'data': {
+                    'token': user.token
+                },
+                'message': ''
+            })
+        except Exception as e:
+            return Response({
+                'result': 'false',
+                'data': 1,
+                'message': {
+                    'detail': str(e)
+                }
+            })
+
+class MaintenanceView(APIView):
+    permission_classes = (AllowAny,)
+
+    def get(self, request):
+        try:
+            res = {
+                'result' : 'true',
+                'data' : 'y',
+                'message' : ''
+            }
+        except Exception as e:
+            res = {
+                'result' : 'false',
+                'data' : 1,
+                'message' : {
+                    'error' : str(e)
+                }
+            }
+        return Response(res, status=status.HTTP_200_OK)
+
 class TokenRefreshView(jwt_views.TokenRefreshView):
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -85,25 +129,3 @@ class TokenRefreshView(jwt_views.TokenRefreshView):
                 'message' : serializer.errors,
             }
             return Response(response, status=status.HTTP_400_BAD_REQUEST)
-class Notification(APIView):
-    def patch(self, request):
-        try:
-            user = request.user
-            token = request.data['token']
-            user.token = token
-            user.save()
-            return Response({
-                'result': 'true',
-                'data': {
-                    'token': user.token
-                },
-                'message': ''
-            })
-        except Exception as e:
-            return Response({
-                'result': 'false',
-                'data': 1,
-                'message': {
-                    'detail': str(e)
-                }
-            })
