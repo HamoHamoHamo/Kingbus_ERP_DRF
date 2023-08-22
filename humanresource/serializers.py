@@ -35,6 +35,8 @@ class UserLoginSerializer(serializers.Serializer):
         #     raise serializers.ValidationError("Bad Request")
         if not check_password(data['password'], user.password):
             raise serializers.ValidationError("Invalid password")
+        if user.role == '임시' or user.use == '삭제' or user.use == '미사용':
+            raise serializers.ValidationError("Invalid user")
         # if data['role']!=user.role:
         #     raise serializers.ValidationError("Invalid login credentials")
         # TODO https://eunjin3786.tistory.com/271
