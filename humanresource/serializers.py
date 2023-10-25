@@ -56,3 +56,13 @@ class UserLoginSerializer(serializers.Serializer):
             'role' : user.role
         }
         return validation
+
+class MemberListSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = Member
+		fields = ['name', 'role', 'phone_num']
+
+class MemberSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = Member
+		fields = ['id', 'user_id', 'name', 'role', 'phone_num', 'base', 'service_allowance', 'annual_allowance', 'performance_allowance', 'meal']
