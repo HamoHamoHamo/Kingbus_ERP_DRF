@@ -8,10 +8,11 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.generics import ListAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from my_settings import MAINTENANCE
 
-from .serializers import UserLoginSerializer
+from .serializers import UserLoginSerializer, MemberListSerializer, MemberSerializer
 from .models import Member
 
 class UserLoginView(APIView):
@@ -102,8 +103,73 @@ class MaintenanceView(APIView):
                     'error' : str(e)
                 }
             }
+            return Response(res, status=status.HTTP_400_BAD_REQUEST)
         return Response(res, status=status.HTTP_200_OK)
+    
+class MemberListView(APIView):
+    def get(self, request):
+        try:
+            data = {}
+            data['member_list'] = Member.objects.filter(use='사용').exclude(role='임시').exclude(role='최고관리자').values('name', 'phone_num', 'role')
+            response = {
+                'result' : 'true',
+                'data' : data,
+                'message' : ''
+            }
+        except Exception as e:
+            response = {
+                'result' : 'false',
+                'data' : 1,
+                'message' : {
+                    'error' : str(e)
+                }
+            }
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+        return Response(response, status=status.HTTP_200_OK)
+       
+class MemberListView(ListAPIView):
+    queryset = Member.objects.filter(use='사용').exclude(role='임시').exclude(role='최고관리자')
+    serializer_class = MemberListSerializer
 
+    def get_queryset(self):
+        search = self.request.GET.get('search', '')
+        queryset = super().get_queryset()
+        if search:
+            return queryset.filter(name__contains=search)
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        data = {
+            'result': 'true',
+            'data': {
+                'member_list': response.data['results'],
+            },
+            'message': '',
+        }
+        return Response(data)
+
+    def handle_exception(self, exc):
+        return Response({
+                'result': 'false',
+                'data' : 1,
+                'message': {
+                    'detail': str(exc),
+                },
+            }, status=400)
+
+class LoginMemberView(APIView):
+    def get(self, request):
+        user = request.user
+        data = MemberSerializer(user).data
+        response = {
+            'result' : 'true',
+            'data' : data,
+            'message' : '',
+        }
+        return Response(response, status=status.HTTP_200_OK)
+    
+     
 class TokenRefreshView(jwt_views.TokenRefreshView):
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

@@ -42,9 +42,9 @@ class ConsultingView(ListAPIView):
                 }
                 return Response(response, status=status.HTTP_201_CREATED)
             except Exception as e:
-                return Response({"error": f'{e}', "message": "File Save Error."}, status=status.HTTP_409_CONFLICT)
+                return Response({"error": f'{e}', "message": "File Save Error."}, status=status.HTTP_400_BAD_REQUEST)
         else:
-            return Response({"message": "Request Body Error."}, status=status.HTTP_409_CONFLICT)
+            return Response({"message": "Request Body Error."}, status=status.HTTP_400_BAD_REQUEST)
 
 def consulting_file_save(upload_files, consulting):
     for file in upload_files:
@@ -83,9 +83,9 @@ class InspectionView(ListAPIView):
                 }
                 return Response(response, status=status.HTTP_201_CREATED)
             except Exception as e:
-                return Response({"error": f'{e}', "message": "File Save Error."}, status=status.HTTP_409_CONFLICT)    
+                return Response({"error": f'{e}', "message": "File Save Error."}, status=status.HTTP_400_BAD_REQUEST)    
         else:
-            return Response({"message": "Request Body Error."}, status=status.HTTP_409_CONFLICT)
+            return Response({"message": "Request Body Error."}, status=status.HTTP_400_BAD_REQUEST)
 
 def inspection_file_save(upload_files, inspection):
     for file in upload_files:
