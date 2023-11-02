@@ -11,6 +11,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from my_settings import MAINTENANCE
+from trp_drf.pagination import Pagination
 
 from .serializers import UserLoginSerializer, MemberListSerializer, MemberSerializer
 from .models import Member
@@ -128,8 +129,9 @@ class MemberListView(APIView):
         return Response(response, status=status.HTTP_200_OK)
        
 class MemberListView(ListAPIView):
-    queryset = Member.objects.filter(use='사용').exclude(role='임시').exclude(role='최고관리자')
+    queryset = Member.objects.filter(use='사용').exclude(role='임시').exclude(role='최고관리자').order_by('authority')
     serializer_class = MemberListSerializer
+    pagination_class = Pagination
 
     def get_queryset(self):
         search = self.request.GET.get('search', '')
@@ -143,12 +145,15 @@ class MemberListView(ListAPIView):
         data = {
             'result': 'true',
             'data': {
+                'count': response.data['count'],
+                'next': response.data['next'],
+                'previous': response.data['previous'],
                 'member_list': response.data['results'],
             },
             'message': '',
         }
         return Response(data)
-
+    
     def handle_exception(self, exc):
         return Response({
                 'result': 'false',
