@@ -108,27 +108,6 @@ class MaintenanceView(APIView):
             return Response(res, status=status.HTTP_400_BAD_REQUEST)
         return Response(res, status=status.HTTP_200_OK)
     
-class MemberListView(APIView):
-    def get(self, request):
-        try:
-            data = {}
-            data['member_list'] = Member.objects.filter(use='사용').exclude(role='임시').exclude(role='최고관리자').values('name', 'phone_num', 'role')
-            response = {
-                'result' : 'true',
-                'data' : data,
-                'message' : ''
-            }
-        except Exception as e:
-            response = {
-                'result' : 'false',
-                'data' : 1,
-                'message' : {
-                    'error' : str(e)
-                }
-            }
-            return Response(response, status=status.HTTP_400_BAD_REQUEST)
-        return Response(response, status=status.HTTP_200_OK)
-       
 class MemberListView(ListAPIView):
     queryset = Member.objects.filter(use='사용').exclude(role='임시').exclude(role='최고관리자').order_by('authority', 'name')
     serializer_class = MemberListSerializer
