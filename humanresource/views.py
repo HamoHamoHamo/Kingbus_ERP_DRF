@@ -1,4 +1,5 @@
 from django import dispatch
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import ObjectDoesNotExist
 from rest_framework_simplejwt import views as jwt_views
@@ -129,13 +130,21 @@ class MemberListView(APIView):
         return Response(response, status=status.HTTP_200_OK)
        
 class MemberListView(ListAPIView):
-    queryset = Member.objects.filter(use='사용').exclude(role='임시').exclude(role='최고관리자').order_by('authority')
+    queryset = Member.objects.filter(use='사용').exclude(role='임시').exclude(role='최고관리자').order_by('authority', 'name')
     serializer_class = MemberListSerializer
     pagination_class = Pagination
 
     def get_queryset(self):
         search = self.request.GET.get('search', '')
+        separate_role = self.request.GET.get('separate_role', '')
+        
         queryset = super().get_queryset()
+        if separate_role == '관리자':
+            queryset = queryset.filter(role='관리자')
+        if separate_role == '운전원':
+            queryset = queryset.filter(Q(role='팀장')|Q(role='운전원'))
+        if separate_role == '용역':
+            queryset = queryset.filter(role='용역')
         if search:
             return queryset.filter(name__contains=search)
         return queryset
