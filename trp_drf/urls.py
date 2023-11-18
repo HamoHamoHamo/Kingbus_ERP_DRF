@@ -10,5 +10,6 @@ urlpatterns = [
     path('complaint/', include('complaint.urls')),
     path('notice', include('notice.urls')),
     path('vehicle', include('vehicle.urls')),
+    path('', include('crudmember.urls')),
 ]
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

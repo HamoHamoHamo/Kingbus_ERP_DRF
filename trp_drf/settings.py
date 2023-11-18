@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist', # 토큰 재발급 하면서 만료시켜줌
 
+    'crudmember',
     'complaint',
     'dispatch',
     'humanresource',
