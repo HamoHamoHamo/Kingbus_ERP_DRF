@@ -24,6 +24,7 @@ class UserLoginSerializer(serializers.Serializer):
         # else:
 
         try:
+            print("TESTTTTTTTT", data['user_id'])
             user = Member.objects.get(user_id=data['user_id'])
         # user = authenticate(**data)
         # if user is None:
