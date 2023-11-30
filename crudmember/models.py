@@ -14,3 +14,13 @@ class Client(models.Model):
 
     creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="client_user", null=True)
     pub_date = models.DateTimeField(verbose_name='작성시간', auto_now_add=True, null=False)
+
+class Category(models.Model):
+    type = models.CharField(max_length=100, verbose_name='종류', null=False)
+    category = models.CharField(max_length=100, verbose_name='항목', null=False)
+
+    creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="category_user", null=True)
+    pub_date = models.DateTimeField(verbose_name='작성시간', auto_now_add=True, null=False)
+
+    def __str__(self):
+        return self.type + " " + self.category

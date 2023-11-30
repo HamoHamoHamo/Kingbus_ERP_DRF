@@ -306,10 +306,10 @@ class RegularlyKnow(APIView):
             return Response(response, status=status.HTTP_201_CREATED)
         else:
             response = {
-                    'result': 'false',
-                    'data': '1',
-                    'message': serializer.errors,
-                }
+                'result': 'false',
+                'data': '1',
+                'message': serializer.errors,
+            }
             return Response(response, status=status.HTTP_400_BAD_REQUEST)
         
     def delete(self, request):
