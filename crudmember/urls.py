@@ -5,5 +5,6 @@ from . import views
 
 urlpatterns = [
     path('client', views.ClientListView.as_view()),
+    path('gasstation', views.GasStationListView.as_view()),
     
 ]

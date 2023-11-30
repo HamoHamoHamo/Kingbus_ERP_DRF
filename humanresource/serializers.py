@@ -1,11 +1,7 @@
-from rest_framework_simplejwt.serializers import TokenRefreshSerializer
-# from django.contrib.auth import authenticate
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
-# from rest_framework_simplejwt.settings import api_settings
 from django.contrib.auth.hashers import check_password
 
-# from django.conf import settings
 from .models import Member
 
 class UserLoginSerializer(serializers.Serializer):
@@ -24,7 +20,6 @@ class UserLoginSerializer(serializers.Serializer):
         # else:
 
         try:
-            print("TESTTTTTTTT", data['user_id'])
             user = Member.objects.get(user_id=data['user_id'])
         # user = authenticate(**data)
         # if user is None:
