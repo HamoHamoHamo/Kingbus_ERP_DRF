@@ -14,10 +14,10 @@ from rest_framework.views import APIView
 
 from trp_drf.settings import DATE_FORMAT ,TODAY
 from trp_drf.pagination import Pagination
-from .models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow
+from .models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist
 from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, \
     DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, \
-    DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer
+    DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer, MorningChecklistSerializer, EveningChecklistSerializer
 
 class MonthlyDispatches(APIView):
     def get(self, request, month):
@@ -321,10 +321,10 @@ class RegularlyKnow(APIView):
         serializer = RegularlyKnowSerializer(data=data)
         if not serializer.is_valid(raise_exception=False):
             response = {
-                    'result': 'false',
-                    'data': '1',
-                    'message': serializer.errors
-                }
+                'result': 'false',
+                'data': '1',
+                'message': serializer.errors
+            }
             return Response(response, status=status.HTTP_400_BAD_REQUEST)
         route_know = DispatchRegularlyRouteKnow.objects.filter(regularly_id=data['regularly_id']).filter(driver_id=data['driver_id'])
         if route_know:
@@ -337,14 +337,160 @@ class RegularlyKnow(APIView):
             return Response(response, status=status.HTTP_200_OK)
         else:
             response = {
-                    'result': 'false',
-                    'data': '1',
-                    'message': {
-                        'regularly_id': '노선숙지가 없습니다'
-                    },
-                }
+                'result': 'false',
+                'data': '1',
+                'message': {
+                    'regularly_id': '노선숙지가 없습니다'
+                },
+            }
             return Response(response, status=status.HTTP_400_BAD_REQUEST)
         
+class MorningChecklistView(APIView):
+    def get(self, request, date):
+        try:
+            datetime.strptime(date, DATE_FORMAT)
+        except Exception as e:
+            response = {
+                'result': 'false',
+                'data': '1',
+                'message': {
+                    'error' : 'invalid date format'
+                },
+            }
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            checklist = MorningChecklist.objects.filter(date=date).get(member=request.user)    
+        except MorningChecklist.DoesNotExist:
+            checklist = MorningChecklist(
+                date = date,
+                member = request.user,
+                creator = request.user
+            )
+            checklist.save()
+            
+        data = MorningChecklistSerializer(checklist).data
+        response = {
+            'result': 'true',
+            'data': data,
+            'message': ''
+        }
+        return Response(response, status=status.HTTP_200_OK)
+
+    def post(self, request, date):
+        data = request.data.copy()
+        data['member'] = request.user.id
+        data['date'] = date
+        data['creator'] = request.user.id
+
+        try:
+            datetime.strptime(date, DATE_FORMAT)
+            datetime.strptime(request.data['arrival_time'], "%H:%M")
+        except Exception as e:
+            response = {
+                'result': 'false',
+                'data': '1',
+                'message': {
+                    'error' : 'invalid date format'
+                },
+            }
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            checklist = MorningChecklist.objects.filter(date=date).get(member=request.user)    
+            serializer = MorningChecklistSerializer(checklist, data=data)
+        except MorningChecklist.DoesNotExist:
+            serializer = MorningChecklistSerializer(data=data)
+        
+        if serializer.is_valid():
+            serializer.save()
+            response = {
+                'result': 'true',
+                'data': serializer.data,
+                'message': ''
+            }
+            return Response(response, status=status.HTTP_200_OK)
+        response = {
+            'result': 'true',
+            'data': '2',
+            'message': {
+                'error': serializer.errors
+            }
+        }
+        return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+class EveningChecklistView(APIView):
+    def get(self, request, date):
+        try:
+            datetime.strptime(date, DATE_FORMAT)
+        except Exception as e:
+            response = {
+                'result': 'false',
+                'data': '1',
+                'message': {
+                    'error' : 'invalid date format'
+                },
+            }
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            checklist = EveningChecklist.objects.filter(date=date).get(member=request.user)    
+        except EveningChecklist.DoesNotExist:
+            checklist = EveningChecklist(
+                date = date,
+                member = request.user,
+                creator = request.user
+            )
+            checklist.save()
+            
+        data = EveningChecklistSerializer(checklist).data
+        response = {
+            'result': 'true',
+            'data': data,
+            'message': ''
+        }
+        return Response(response, status=status.HTTP_200_OK)
+
+    def post(self, request, date):
+        data = request.data.copy()
+        data['member'] = request.user.id
+        data['creator'] = request.user.id
+        data['date'] = date
+
+        try:
+            datetime.strptime(date, DATE_FORMAT)
+        except Exception as e:
+            response = {
+                'result': 'false',
+                'data': '1',
+                'message': {
+                    'error' : 'invalid date format'
+                },
+            }
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            checklist = EveningChecklist.objects.filter(date=date).get(member=request.user)    
+            serializer = EveningChecklistSerializer(checklist, data=data)
+        except EveningChecklist.DoesNotExist:
+            serializer = EveningChecklistSerializer(data=data)
+        
+        if serializer.is_valid():
+            serializer.save()
+            response = {
+                'result': 'true',
+                'data': serializer.data,
+                'message': ''
+            }
+            return Response(response, status=status.HTTP_200_OK)
+        response = {
+            'result': 'true',
+            'data': '2',
+            'message': {
+                'error': serializer.errors
+            }
+        }
+        return Response(response, status=status.HTTP_400_BAD_REQUEST)
 
 class ResetConnectCheck(APIView):
     def post(self, request):
