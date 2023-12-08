@@ -77,3 +77,39 @@ class GasStationListView(ListAPIView):
                 'detail': str(exc),
             },
         }, status=400)
+
+class GarageListView(ListAPIView):
+    queryset = Category.objects.filter(type='차고지').order_by('category')
+    serializer_class = CategoryListSerializer
+    pagination_class = Pagination
+
+    def get_queryset(self):
+        search = self.request.GET.get('search', '')
+        
+        queryset = super().get_queryset()
+        if search:
+            return queryset.filter(category__contains=search)
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        data = {
+            'result': 'true',
+            'data': {
+                'count': response.data['count'],
+                'next': response.data['next'],
+                'previous': response.data['previous'],
+                'garage_list': response.data['results'],
+            },
+            'message': '',
+        }
+        return Response(data)
+    
+    def handle_exception(self, exc):
+        return Response({
+            'result': 'false',
+            'data' : 1,
+            'message': {
+                'detail': str(exc),
+            },
+        }, status=400)

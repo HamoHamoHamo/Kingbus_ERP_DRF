@@ -6,7 +6,9 @@ from django.shortcuts import get_object_or_404
 from .models import DispatchOrderWaypoint, DispatchOrder, DispatchRegularly, \
 	DispatchRegularlyConnect, DispatchOrderConnect, DriverCheck, ConnectRefusal, \
 	DispatchRegularlyWaypoint, DispatchRegularlyRouteKnow, DispatchRegularlyData, \
-	RegularlyGroup
+	RegularlyGroup, MorningChecklist, EveningChecklist
+from crudmember.models import Category
+from humanresource.models import Member
 
 class CheckTimeSerializer(serializers.ModelSerializer):
 	class Meta:
@@ -197,3 +199,42 @@ class DispatchRegularlyGroupSerializer(serializers.ModelSerializer):
 	class Meta:
 		model = RegularlyGroup
 		fields = ['id', 'name']
+
+class MorningChecklistSerializer(serializers.ModelSerializer):
+	bus = serializers.SerializerMethodField()
+	
+	class Meta:
+		model = MorningChecklist
+		fields = [
+			'member',
+			'date',
+			'arrival_time',
+			'garage_location',
+			'health_condition',
+			'cleanliness_condition',
+			'route_familiarity',
+			'alcohol_test',
+			'bus',
+			'creator',
+		]
+	
+	def get_bus(self, obj):
+		return obj.get_vehicle_list()
+
+	def to_representation(self, instance):
+		representation = super().to_representation(instance)
+		representation['member'] = Member.objects.get(id=representation['member']).name if representation['member'] else None
+
+		return representation
+
+class EveningChecklistSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = EveningChecklist
+		fields = '__all__'
+	
+	def to_representation(self, instance):
+		representation = super().to_representation(instance)
+		representation['member'] = Member.objects.get(id=representation['member']).name if representation['member'] else None
+		representation['garage_location'] = Category.objects.get(id=representation['garage_location']).category if representation['garage_location'] else None
+
+		return representation

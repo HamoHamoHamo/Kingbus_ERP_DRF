@@ -10,5 +10,7 @@ urlpatterns = [
     path('regularly', views.RegularlyList.as_view()),
     path('regularly/group', views.RegularlyGroupList.as_view()),
     path('regularly/know', views.RegularlyKnow.as_view()),
+    path('checklist/morning/<str:date>', views.MorningChecklistView.as_view()),
+    path('checklist/evening/<str:date>', views.EveningChecklistView.as_view()),
     path('test/reset-connect-check', views.ResetConnectCheck.as_view()),
 ]
