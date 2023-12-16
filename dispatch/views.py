@@ -14,24 +14,27 @@ from rest_framework.views import APIView
 
 from trp_drf.settings import DATE_FORMAT ,TODAY
 from trp_drf.pagination import Pagination
-from .models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist
+from .models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory
 from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, \
-    DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, \
+    DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, DrivingHistorySerializer, \
     DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer, MorningChecklistSerializer, EveningChecklistSerializer
+
+def get_invalid_date_format_response():
+    response = {
+        'result': 'false',
+        'data': '1',
+        'message': {
+            'error' : 'invalid date format'
+        },
+    }
+    return response
 
 class MonthlyDispatches(APIView):
     def get(self, request, month):
         try:
             last_day = datetime.strftime(datetime.strptime(f'{month}-01', DATE_FORMAT) + relativedelta(months=1) - timedelta(days=1), DATE_FORMAT)[8:]
         except ValueError:
-            response = {
-                'result' : 'false',
-                'data' : 1,
-                'message' : {
-                    'date' : '날짜를 정확하게 입력하세요'
-                }
-            }
-            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+            return Response(get_invalid_date_format_response(), status=status.HTTP_400_BAD_REQUEST)
         user = request.user
 
         order = [0] * int(last_day)
@@ -68,14 +71,7 @@ class DailyDispatches(APIView):
         try:
             datetime.strptime(date, DATE_FORMAT)
         except ValueError:
-            response = {
-                'result' : 'false',
-                'data' : 1,
-                'message' : {
-                    'date' : '날짜를 정확하게 입력하세요'
-                }
-            }
-            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+            return Response(get_invalid_date_format_response(), status=status.HTTP_400_BAD_REQUEST)
 
         user = request.user
         r_connects = DispatchRegularlyConnect.objects.prefetch_related('check_regularly_connect').select_related('regularly_id').filter(departure_date__startswith=date).filter(driver_id=user)
@@ -424,14 +420,7 @@ class EveningChecklistView(APIView):
         try:
             datetime.strptime(date, DATE_FORMAT)
         except Exception as e:
-            response = {
-                'result': 'false',
-                'data': '1',
-                'message': {
-                    'error' : 'invalid date format'
-                },
-            }
-            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+            return Response(get_invalid_date_format_response(), status=status.HTTP_400_BAD_REQUEST)
         
         try:
             checklist = EveningChecklist.objects.filter(date=date).get(member=request.user)    
@@ -460,20 +449,101 @@ class EveningChecklistView(APIView):
         try:
             datetime.strptime(date, DATE_FORMAT)
         except Exception as e:
-            response = {
-                'result': 'false',
-                'data': '1',
-                'message': {
-                    'error' : 'invalid date format'
-                },
-            }
-            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+            return Response(get_invalid_date_format_response(), status=status.HTTP_400_BAD_REQUEST)
         
         try:
             checklist = EveningChecklist.objects.filter(date=date).get(member=request.user)    
             serializer = EveningChecklistSerializer(checklist, data=data)
         except EveningChecklist.DoesNotExist:
             serializer = EveningChecklistSerializer(data=data)
+        
+        if serializer.is_valid():
+            serializer.save()
+            response = {
+                'result': 'true',
+                'data': serializer.data,
+                'message': ''
+            }
+            return Response(response, status=status.HTTP_200_OK)
+        response = {
+            'result': 'true',
+            'data': '2',
+            'message': {
+                'error': serializer.errors
+            }
+        }
+        return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+class DrivingHistoryView(APIView):
+    def return_invalid_connect_id_response(self, data_num):
+        response = {
+                'result': 'false',
+                'data': data_num,
+                'message': {
+                    'error' : 'invalid connect id'
+                },
+            }
+        return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+    def get(self, request):
+        regularly_connect_id = self.request.GET.get('regularly_connect_id')
+        order_connect_id = self.request.GET.get('order_connect_id')
+
+        if regularly_connect_id and order_connect_id:
+            return self.return_invalid_connect_id_response('1')
+        try:
+            if regularly_connect_id:
+                connect = DispatchRegularlyConnect.objects.filter(driver_id=request.user).get(id=regularly_connect_id)
+                driving_history = DrivingHistory.objects.get(regularly_connect_id=regularly_connect_id)
+            elif order_connect_id:
+                connect = DispatchOrderConnect.objects.filter(driver_id=request.user).get(id=order_connect_id)
+                driving_history = DrivingHistory.objects.get(order_connect_id=order_connect_id)
+            else:
+                return self.return_invalid_connect_id_response('1')
+        except DrivingHistory.DoesNotExist:
+            driving_history = DrivingHistory(
+                member = request.user,
+                creator = request.user,
+            )
+            if regularly_connect_id:
+                driving_history.regularly_connect_id = connect
+            elif order_connect_id:
+                driving_history.order_connect_id = connect
+            driving_history.save()
+        except DispatchOrderConnect.DoesNotExist:
+            return self.return_invalid_connect_id_response('1')
+        except DispatchRegularlyConnect.DoesNotExist:
+            return self.return_invalid_connect_id_response('1')
+
+        data = DrivingHistorySerializer(driving_history).data
+        response = {
+            'result': 'true',
+            'data': data,
+            'message': ''
+        }
+        return Response(response, status=status.HTTP_200_OK)
+
+    def patch(self, request):
+        data = request.data.copy()
+        data['member'] = request.user.id
+        data['creator'] = request.user.id
+
+        if data['regularly_connect_id'] and data['order_connect_id']:
+            return self.return_invalid_connect_id_response('1')
+
+        try:
+            if data['regularly_connect_id']:
+                connect = DispatchRegularlyConnect.objects.filter(driver_id=request.user).get(id=data['regularly_connect_id'])
+                driving_history = DrivingHistory.objects.get(regularly_connect_id=connect)
+            elif data['order_connect_id']:
+                connect = DispatchOrderConnect.objects.filter(driver_id=request.user).get(id=data['order_connect_id'])
+                driving_history = DrivingHistory.objects.get(order_connect_id=connect)
+            else:
+                return self.return_invalid_connect_id_response('1')
+        except Exception as e:
+            return self.return_invalid_connect_id_response('1')
+
+        serializer = DrivingHistorySerializer(driving_history, data=data)
         
         if serializer.is_valid():
             serializer.save()

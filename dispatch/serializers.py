@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404
 from .models import DispatchOrderWaypoint, DispatchOrder, DispatchRegularly, \
 	DispatchRegularlyConnect, DispatchOrderConnect, DriverCheck, ConnectRefusal, \
 	DispatchRegularlyWaypoint, DispatchRegularlyRouteKnow, DispatchRegularlyData, \
-	RegularlyGroup, MorningChecklist, EveningChecklist
+	RegularlyGroup, MorningChecklist, EveningChecklist, DrivingHistory
 from crudmember.models import Category
 from humanresource.models import Member
 
@@ -228,9 +228,26 @@ class MorningChecklistSerializer(serializers.ModelSerializer):
 		return representation
 
 class EveningChecklistSerializer(serializers.ModelSerializer):
+	bus = serializers.SerializerMethodField()
+
 	class Meta:
 		model = EveningChecklist
-		fields = '__all__'
+		fields = [
+			'member',
+			'date',
+			'garage_location',
+			'battery_condition',
+			'drive_distance',
+			'fuel_quantity',
+			'urea_solution_quantity',
+			'suit_gauge',
+			'special_notes',
+			'bus',
+			'creator'
+		]
+
+	def get_bus(self, obj):
+		return obj.get_vehicle()
 	
 	def to_representation(self, instance):
 		representation = super().to_representation(instance)
@@ -238,3 +255,33 @@ class EveningChecklistSerializer(serializers.ModelSerializer):
 		representation['garage_location'] = Category.objects.get(id=representation['garage_location']).category if representation['garage_location'] else None
 
 		return representation
+
+class DrivingHistorySerializer(serializers.ModelSerializer):
+	connect = serializers.SerializerMethodField()
+
+	class Meta:
+		model = DrivingHistory
+		fields = [
+			'member',
+			'regularly_connect_id',
+			'order_connect_id',
+			'departure_km',
+			'arrival_km',
+			'passenger_num',
+			'special_notes',
+			'creator',
+			'connect',
+		]
+
+	def get_connect(self, obj):
+		return obj.get_connect_data()
+	
+	def to_representation(self, instance):
+		representation = super().to_representation(instance)
+		representation['member'] = Member.objects.get(id=representation['member']).name if representation['member'] else None
+		if not representation['order_connect_id']:
+			representation['order_connect_id'] = ''
+		if not representation['regularly_connect_id']:
+			representation['regularly_connect_id'] = ''
+		return representation
+		
