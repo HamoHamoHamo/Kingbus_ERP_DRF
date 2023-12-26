@@ -399,7 +399,9 @@ class MorningChecklistView(APIView):
             serializer = MorningChecklistSerializer(data=data)
         
         if serializer.is_valid():
-            serializer.save()
+            instance = serializer.save()
+            instance.submit_check = True
+            instance.save()
             response = {
                 'result': 'true',
                 'data': serializer.data,
@@ -407,7 +409,7 @@ class MorningChecklistView(APIView):
             }
             return Response(response, status=status.HTTP_200_OK)
         response = {
-            'result': 'true',
+            'result': 'false',
             'data': '2',
             'message': {
                 'error': serializer.errors
@@ -458,7 +460,9 @@ class EveningChecklistView(APIView):
             serializer = EveningChecklistSerializer(data=data)
         
         if serializer.is_valid():
-            serializer.save()
+            instance = serializer.save()
+            instance.submit_check = True
+            instance.save()
             response = {
                 'result': 'true',
                 'data': serializer.data,
@@ -466,7 +470,7 @@ class EveningChecklistView(APIView):
             }
             return Response(response, status=status.HTTP_200_OK)
         response = {
-            'result': 'true',
+            'result': 'false',
             'data': '2',
             'message': {
                 'error': serializer.errors
@@ -509,6 +513,7 @@ class DrivingHistoryView(APIView):
                 driving_history.regularly_connect_id = connect
             elif order_connect_id:
                 driving_history.order_connect_id = connect
+            driving_history.date = connect.departure_date[:10]
             driving_history.save()
         except DispatchOrderConnect.DoesNotExist:
             return self.return_invalid_connect_id_response('1')
@@ -540,13 +545,17 @@ class DrivingHistoryView(APIView):
                 driving_history = DrivingHistory.objects.get(order_connect_id=connect)
             else:
                 return self.return_invalid_connect_id_response('1')
+            date = connect.departure_date[:10]
         except Exception as e:
             return self.return_invalid_connect_id_response('1')
 
         serializer = DrivingHistorySerializer(driving_history, data=data)
         
         if serializer.is_valid():
-            serializer.save()
+            instance = serializer.save()
+            instance.submit_check = True
+            instance.date = date
+            instance.save()
             response = {
                 'result': 'true',
                 'data': serializer.data,
@@ -554,7 +563,7 @@ class DrivingHistoryView(APIView):
             }
             return Response(response, status=status.HTTP_200_OK)
         response = {
-            'result': 'true',
+            'result': 'false',
             'data': '2',
             'message': {
                 'error': serializer.errors

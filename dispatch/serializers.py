@@ -216,6 +216,7 @@ class MorningChecklistSerializer(serializers.ModelSerializer):
 			'alcohol_test',
 			'bus',
 			'creator',
+			'submit_check',
 		]
 	
 	def get_bus(self, obj):
@@ -243,7 +244,8 @@ class EveningChecklistSerializer(serializers.ModelSerializer):
 			'suit_gauge',
 			'special_notes',
 			'bus',
-			'creator'
+			'creator',
+			'submit_check',
 		]
 
 	def get_bus(self, obj):
@@ -262,6 +264,7 @@ class DrivingHistorySerializer(serializers.ModelSerializer):
 	class Meta:
 		model = DrivingHistory
 		fields = [
+			'date',
 			'member',
 			'regularly_connect_id',
 			'order_connect_id',
@@ -269,19 +272,31 @@ class DrivingHistorySerializer(serializers.ModelSerializer):
 			'arrival_km',
 			'passenger_num',
 			'special_notes',
+			'departure_date',
+			'arrival_date',
 			'creator',
 			'connect',
+			'submit_check',
 		]
-
+	def validate(self, attrs):
+		super().validate(attrs)
+		if attrs['departure_date']:
+			try:
+				datetime.strptime(attrs['departure_date'], "%Y-%m-%d %H:%M")
+			except:
+				raise serializers.ValidationError("invalid date format")
+		if attrs['arrival_date']:
+			try:
+				datetime.strptime(attrs['arrival_date'], "%Y-%m-%d %H:%M")
+			except:
+				raise serializers.ValidationError("invalid date format")
+		return attrs
+	
 	def get_connect(self, obj):
 		return obj.get_connect_data()
 	
 	def to_representation(self, instance):
 		representation = super().to_representation(instance)
 		representation['member'] = Member.objects.get(id=representation['member']).name if representation['member'] else None
-		if not representation['order_connect_id']:
-			representation['order_connect_id'] = ''
-		if not representation['regularly_connect_id']:
-			representation['regularly_connect_id'] = ''
 		return representation
 		
