@@ -224,6 +224,7 @@ class MorningChecklist(models.Model):
         result = set(result)
         return list(result)
 
+    submit_check = models.BooleanField(verbose_name="제출여부", null=False, default=False)
     member = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="morning_checklist_member", null=True)
     date = models.CharField(verbose_name="날짜", max_length=100, null=False, blank=False)
     arrival_time = models.CharField(verbose_name="점호지 도착시간", max_length=100, null=False, blank=True)
@@ -240,10 +241,13 @@ class EveningChecklist(models.Model):
     def get_vehicle(self):
         order_bus = DispatchOrderConnect.objects.filter(departure_date__startswith=self.date[:10]).filter(driver_id=self.member).order_by('arrival_date').last()
         regularly_bus = DispatchRegularlyConnect.objects.filter(departure_date__startswith=self.date[:10]).filter(driver_id=self.member).order_by('arrival_date').last()
-        if order_bus.arrival_date > regularly_bus.arrival_date:
+        if not (order_bus and regularly_bus):
+            return ""
+        if order_bus.arrival_date > regularly_bus.arrival_date or not regularly_bus:
             return order_bus.bus_id.vehicle_num
         return regularly_bus.bus_id.vehicle_num
     
+    submit_check = models.BooleanField(verbose_name="제출여부", null=False, default=False)
     member = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="evening_checklist_member", null=True)
     date = models.CharField(verbose_name="날짜", max_length=100, null=False, blank=False)
     garage_location = models.ForeignKey(Category, on_delete=models.SET_NULL, related_name="garage_location", verbose_name="차고지", null=True)
@@ -270,18 +274,20 @@ class DrivingHistory(models.Model):
         return {
             "bus" : connect.bus_id.vehicle_num,
             'departure' : order.departure,
-            'departure_time' : connect.departure_date[11:16],
             'arrival' : order.arrival,
-            'arrival_time' : connect.arrival_date[11:16],
         }
 
+    submit_check = models.BooleanField(verbose_name="제출여부", null=False, default=False)
     member = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="driving_history_member", null=True)
-    regularly_connect_id = models.OneToOneField(DispatchRegularlyConnect, on_delete=models.SET_NULL, related_name="driving_history_regularly", null=True)
-    order_connect_id = models.OneToOneField(DispatchOrderConnect, on_delete=models.SET_NULL, related_name="driving_history_order", null=True)
+    date = models.CharField(verbose_name="날짜", max_length=100, null=False, blank=True)
+    regularly_connect_id = models.OneToOneField(DispatchRegularlyConnect, on_delete=models.CASCADE, related_name="driving_history_regularly", null=True)
+    order_connect_id = models.OneToOneField(DispatchOrderConnect, on_delete=models.CASCADE, related_name="driving_history_order", null=True)
     departure_km = models.CharField(verbose_name="출발계기km", max_length=100, null=False, blank=True)
     arrival_km = models.CharField(verbose_name="도착계기km", max_length=100, null=False, blank=True)
     passenger_num = models.CharField(verbose_name="탑승인원수", max_length=100, null=False, blank=True)
     special_notes = models.CharField(verbose_name="특이사항", max_length=100, null=False, blank=True)
+    departure_date = models.CharField(verbose_name="출발날짜", max_length=100, null=False, blank=True)
+    arrival_date = models.CharField(verbose_name="도착날짜", max_length=100, null=False, blank=True)
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
     creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="driving_history_creator", db_column="creator_id", null=True)
