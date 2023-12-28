@@ -14,10 +14,11 @@ from rest_framework.views import APIView
 
 from trp_drf.settings import DATE_FORMAT ,TODAY
 from trp_drf.pagination import Pagination
-from .models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory
+from .models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory, DailyChecklist, WeeklyChecklist, EquipmentChecklist
 from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, \
     DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, DrivingHistorySerializer, \
-    DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer, MorningChecklistSerializer, EveningChecklistSerializer
+    DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer, MorningChecklistSerializer, EveningChecklistSerializer, \
+    DailyChecklistSerializer, WeeklyChecklistSerializer, EquipmentChecklistSerializer
 
 def get_invalid_date_format_response():
     response = {
@@ -555,6 +556,231 @@ class DrivingHistoryView(APIView):
             instance = serializer.save()
             instance.submit_check = True
             instance.date = date
+            instance.save()
+            response = {
+                'result': 'true',
+                'data': serializer.data,
+                'message': ''
+            }
+            return Response(response, status=status.HTTP_200_OK)
+        response = {
+            'result': 'false',
+            'data': '2',
+            'message': {
+                'error': serializer.errors
+            }
+        }
+        return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+class DailyChecklistView(APIView):
+    def get(self, request, date):
+        try:
+            datetime.strptime(date, DATE_FORMAT)
+        except Exception as e:
+            response = {
+                'result': 'false',
+                'data': '1',
+                'message': {
+                    'error' : 'invalid date format'
+                },
+            }
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            checklist = DailyChecklist.objects.filter(date=date).get(member=request.user)    
+        except DailyChecklist.DoesNotExist:
+            checklist = DailyChecklist(
+                date = date,
+                member = request.user,
+                creator = request.user
+            )
+            checklist.save()
+            
+        data = DailyChecklistSerializer(checklist).data
+        response = {
+            'result': 'true',
+            'data': data,
+            'message': ''
+        }
+        return Response(response, status=status.HTTP_200_OK)
+
+    def post(self, request, date):
+        data = request.data.copy()
+        data['member'] = request.user.id
+        data['creator'] = request.user.id
+        data['date'] = date
+
+        try:
+            datetime.strptime(date, DATE_FORMAT)
+        except Exception as e:
+            response = {
+                'result': 'false',
+                'data': '1',
+                'message': {
+                    'error' : 'invalid date format'
+                },
+            }
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            checklist = DailyChecklist.objects.filter(date=date).get(member=request.user)    
+            serializer = DailyChecklistSerializer(checklist, data=data)
+        except DailyChecklist.DoesNotExist:
+            serializer = DailyChecklistSerializer(data=data)
+        
+        if serializer.is_valid():
+            instance = serializer.save()
+            instance.submit_check = True
+            instance.save()
+            response = {
+                'result': 'true',
+                'data': serializer.data,
+                'message': ''
+            }
+            return Response(response, status=status.HTTP_200_OK)
+        response = {
+            'result': 'false',
+            'data': '2',
+            'message': {
+                'error': serializer.errors
+            }
+        }
+        return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+class WeeklyChecklistView(APIView):
+    def get(self, request, date):
+        try:
+            datetime.strptime(date, DATE_FORMAT)
+        except Exception as e:
+            response = {
+                'result': 'false',
+                'data': '1',
+                'message': {
+                    'error' : 'invalid date format'
+                },
+            }
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            checklist = WeeklyChecklist.objects.filter(date=date).get(member=request.user)    
+        except WeeklyChecklist.DoesNotExist:
+            checklist = WeeklyChecklist(
+                date = date,
+                member = request.user,
+                creator = request.user
+            )
+            checklist.save()
+            
+        data = WeeklyChecklistSerializer(checklist).data
+        response = {
+            'result': 'true',
+            'data': data,
+            'message': ''
+        }
+        return Response(response, status=status.HTTP_200_OK)
+
+    def post(self, request, date):
+        data = request.data.copy()
+        data['member'] = request.user.id
+        data['creator'] = request.user.id
+        data['date'] = date
+
+        try:
+            datetime.strptime(date, DATE_FORMAT)
+        except Exception as e:
+            response = {
+                'result': 'false',
+                'data': '1',
+                'message': {
+                    'error' : 'invalid date format'
+                },
+            }
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            checklist = WeeklyChecklist.objects.filter(date=date).get(member=request.user)    
+            serializer = WeeklyChecklistSerializer(checklist, data=data)
+        except WeeklyChecklist.DoesNotExist:
+            serializer = WeeklyChecklistSerializer(data=data)
+        
+        if serializer.is_valid():
+            instance = serializer.save()
+            instance.submit_check = True
+            instance.save()
+            response = {
+                'result': 'true',
+                'data': serializer.data,
+                'message': ''
+            }
+            return Response(response, status=status.HTTP_200_OK)
+        response = {
+            'result': 'false',
+            'data': '2',
+            'message': {
+                'error': serializer.errors
+            }
+        }
+        return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+class EquipmentChecklistView(APIView):
+    def get(self, request, date):
+        try:
+            datetime.strptime(date, DATE_FORMAT)
+        except Exception as e:
+            response = {
+                'result': 'false',
+                'data': '1',
+                'message': {
+                    'error' : 'invalid date format'
+                },
+            }
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            checklist = EquipmentChecklist.objects.filter(date=date).get(member=request.user)    
+        except EquipmentChecklist.DoesNotExist:
+            checklist = EquipmentChecklist(
+                date = date,
+                member = request.user,
+                creator = request.user
+            )
+            checklist.save()
+            
+        data = EquipmentChecklistSerializer(checklist).data
+        response = {
+            'result': 'true',
+            'data': data,
+            'message': ''
+        }
+        return Response(response, status=status.HTTP_200_OK)
+
+    def post(self, request, date):
+        data = request.data.copy()
+        data['member'] = request.user.id
+        data['creator'] = request.user.id
+        data['date'] = date
+
+        try:
+            datetime.strptime(date, DATE_FORMAT)
+        except Exception as e:
+            response = {
+                'result': 'false',
+                'data': '1',
+                'message': {
+                    'error' : 'invalid date format'
+                },
+            }
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            checklist = EquipmentChecklist.objects.filter(date=date).get(member=request.user)    
+            serializer = EquipmentChecklistSerializer(checklist, data=data)
+        except EquipmentChecklist.DoesNotExist:
+            serializer = EquipmentChecklistSerializer(data=data)
+        
+        if serializer.is_valid():
+            instance = serializer.save()
+            instance.submit_check = True
             instance.save()
             response = {
                 'result': 'true',
