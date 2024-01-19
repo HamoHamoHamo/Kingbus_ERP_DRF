@@ -16,5 +16,7 @@ urlpatterns = [
     path('checklist/daily/<str:date>', views.DailyChecklistView.as_view()),
     path('checklist/weekly/<str:date>', views.WeeklyChecklistView.as_view()),
     path('checklist/equipment/<str:date>', views.EquipmentChecklistView.as_view()),
+    path('team/list', views.TeamConnectListView.as_view()),
+    path('team/<int:id>', views.TeamDriverConnectView.as_view()),
     path('test/reset-connect-check', views.ResetConnectCheck.as_view()),
 ]
