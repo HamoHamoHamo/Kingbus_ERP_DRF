@@ -14,11 +14,12 @@ from rest_framework.views import APIView
 
 from trp_drf.settings import DATE_FORMAT ,TODAY
 from trp_drf.pagination import Pagination
+from humanresource.models import Member
 from .models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory, DailyChecklist, WeeklyChecklist, EquipmentChecklist
 from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, \
     DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, DrivingHistorySerializer, \
     DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer, MorningChecklistSerializer, EveningChecklistSerializer, \
-    DailyChecklistSerializer, WeeklyChecklistSerializer, EquipmentChecklistSerializer
+    DailyChecklistSerializer, WeeklyChecklistSerializer, EquipmentChecklistSerializer, TeamRegularlyConnectSerializer, TeamOrderConnectSerializer
 
 def get_invalid_date_format_response():
     response = {
@@ -797,6 +798,150 @@ class EquipmentChecklistView(APIView):
         }
         return Response(response, status=status.HTTP_400_BAD_REQUEST)
 
+class TeamConnectListView(APIView):
+    def get(self, request):
+        user = request.user
+        if user.authority > 3:
+            response = {
+                'result': 'false',
+                'data': '1',
+                'message': {
+                'error': 'authority_error'
+                }
+            }
+            return Response(response, status=status.HTTP_401_UNAUTHORIZED)
+
+        team = user.team
+        if team:
+            member_list = team.member_team.all().order_by('name')
+        else:
+            member_list = ''
+        data_list = []
+        for member in member_list:
+            regularly_connect_list = DispatchRegularlyConnect.objects.filter(driver_id=member).filter(departure_date__startswith=TODAY).order_by('departure_date')
+            order_connect_list = DispatchOrderConnect.objects.filter(driver_id=member).filter(departure_date__startswith=TODAY).order_by('departure_date')
+            current_time = str(datetime.now())[:16]
+
+            current_regularly_connect = regularly_connect_list.filter(departure_date__gte=current_time).first()
+            if not current_regularly_connect:
+                current_regularly_connect = regularly_connect_list.last()
+            current_order_connect = order_connect_list.filter(departure_date__gte=current_time).first()
+            if not current_order_connect:
+                current_order_connect = order_connect_list.last()
+            total_count = regularly_connect_list.count() + order_connect_list.count()
+            current_count = regularly_connect_list.filter(departure_date__lte=current_time).count() + order_connect_list.filter(departure_date__lte=current_time).count() + 1
+            if current_count > total_count:
+                current_count = total_count
+
+            if not current_order_connect and not current_regularly_connect:
+                data = {
+                    'member' : member.name,
+                    'member_id' : member.id,
+                    'current_count' : 0,
+                    'total_count' : 0,
+                    'bus' : '',
+                    'route' : '',
+                    'departure_time' : '',
+                    'check1' : '',
+                    'check2' : '',
+                    'check3' : '',
+                }
+                data_list.append(data)
+                continue
+            elif (not current_order_connect and current_regularly_connect) or \
+                (current_order_connect and current_regularly_connect and \
+                current_regularly_connect.departure_date < current_order_connect.departure_date):
+                bus = current_regularly_connect.bus_id.vehicle_num
+                departure_time = current_regularly_connect.departure_date[11:16]
+                route = current_regularly_connect.regularly_id.route
+                driver_check = current_regularly_connect.check_regularly_connect
+
+            else:
+                bus = current_order_connect.bus_id.vehicle_num
+                departure_time = current_order_connect.departure_date[11:16]
+                route = current_order_connect.order_id.route
+                driver_check = current_order_connect.check_order_connect
+
+            temp_time = datetime.strptime(departure_time, "%H:%M")
+            check_time1 = datetime.strftime(temp_time - timedelta(hours=1.5), "%H:%M")
+            check_time2 = datetime.strftime(temp_time - timedelta(hours=1), "%H:%M")
+            check_time3 = datetime.strftime(temp_time - timedelta(minutes=20), "%H:%M")
+            current_time = datetime.strftime(datetime.now(), "%H:%M")
+
+            check1 = 'true'
+            check2 = 'true'
+            check3 = 'true'
+            if current_time > check_time1 and not driver_check.wake_time:
+                check1 = 'false'
+            if current_time > check_time2 and not driver_check.drive_time:
+                check2 = 'false'
+            if current_time > check_time3 and not driver_check.departure_time:
+                check3 = 'false'
+
+            data = {
+                'member' : member.name,
+                'member_id' : member.id,
+                'current_count' : current_count,
+                'total_count' : total_count,
+                'bus' : bus,
+                'route' : route,
+                'departure_time' : departure_time,
+                'check1' : check1,
+                'check2' : check2,
+                'check3' : check3,
+            }
+            data_list.append(data)
+
+        response = {
+            'result': 'true',
+            'data': data_list,
+            'message': ''
+        }
+        return Response(response, status=status.HTTP_200_OK)
+
+class TeamDriverConnectView(APIView):
+    def get(self, request, id):
+        user = request.user
+        if user.authority > 3:
+            response = {
+                'result': 'false',
+                'data': '1',
+                'message': {
+                    'error': 'authority_error'
+                }
+            }
+            return Response(response, status=status.HTTP_401_UNAUTHORIZED)
+
+        member = get_object_or_404(Member, id=id)
+        morning_checklist = MorningChecklist.objects.filter(date=TODAY)
+        if morning_checklist:
+            alcohol_test = morning_checklist[0].alcohol_test
+        else:
+            alcohol_test = ''
+        
+        regularly_connect_list = DispatchRegularlyConnect.objects.filter(driver_id=member).filter(departure_date__startswith=TODAY).order_by('departure_date')
+        order_connect_list = DispatchOrderConnect.objects.filter(driver_id=member).filter(departure_date__startswith=TODAY).order_by('departure_date')
+
+        regularly_data = TeamRegularlyConnectSerializer(regularly_connect_list, many=True).data
+        order_data = TeamOrderConnectSerializer(order_connect_list, many=True).data
+
+        data = {
+            'phone' : member.phone_num,
+            'alcohol_test' : alcohol_test,
+            'regularly' : regularly_data,
+            'order' : order_data,
+            #'test' : regularly_data + order_data,
+        }
+
+        response = {
+            'result': 'true',
+            'data': data,
+            'message': ''
+        }
+        return Response(response, status=status.HTTP_200_OK)
+
+
+    
 class ResetConnectCheck(APIView):
     def post(self, request):
         regularly_id = request.data['regularly_id']

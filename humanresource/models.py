@@ -1,5 +1,10 @@
 from django.db import models
 
+class Team(models.Model):
+    name =models.CharField(verbose_name='팀이름', max_length=100, null=False, blank=False)
+    pub_date = models.DateTimeField(verbose_name='작성시간', auto_now_add=True, null=False)
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
+
 class Member(models.Model):
     username = None
     USERNAME_FIELD = 'user_id'
@@ -13,6 +18,8 @@ class Member(models.Model):
     name = models.CharField(verbose_name='이름', max_length=100, null=False)
     role = models.CharField(verbose_name='업무', max_length=100, null=False)
     birthdate = models.CharField(verbose_name='생년월일', max_length=100, null=False)
+    resident_number1 = models.CharField(verbose_name='주민등록번호 앞자리', max_length=100, null=False, blank=True)
+    resident_number2 = models.CharField(verbose_name='주민등록번호 뒷자리', max_length=100, null=False, blank=True)
     phone_num = models.CharField(verbose_name='전화번호', max_length=100, null=False)
     emergency = models.CharField(verbose_name='비상연락망', max_length=100, null=False, blank=True)
     address = models.CharField(verbose_name='주소', max_length=100, null=False)
@@ -28,6 +35,12 @@ class Member(models.Model):
     position = models.CharField(verbose_name='직급', max_length=100, null=False, blank=True)
     apprenticeship_note = models.CharField(verbose_name='견습노선 및 내용', max_length=100, null=False, blank=True)
     leave_reason = models.CharField(verbose_name='퇴사사유', max_length=100, null=False, blank=True)
+    company =models.CharField(verbose_name='소속회사', max_length=100, null=False, blank=True)
+    team =models.ForeignKey(Team, on_delete=models.SET_NULL, related_name="member_team", null=True)
+    final_opinion =models.CharField(verbose_name='최종소견', max_length=100, null=False, blank=True)
+    interviewer =models.CharField(verbose_name='면접담당자', max_length=100, null=False, blank=True)
+    end_date =models.CharField(verbose_name='종료일', max_length=100, null=False, blank=True)
+    leave_date =models.CharField(verbose_name='퇴사일', max_length=100, null=False, blank=True)
 
     base = models.CharField(verbose_name='기본급', max_length=20, null=False, default=0)
     service_allowance = models.CharField(verbose_name='근속수당', max_length=20, null=False, default=0)

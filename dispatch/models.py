@@ -191,8 +191,11 @@ class Schedule(models.Model):
 class DriverCheck(models.Model):
     regularly_id = models.OneToOneField(DispatchRegularlyConnect, on_delete=models.CASCADE, related_name="check_regularly_connect", null=True)
     order_id = models.OneToOneField(DispatchOrderConnect, on_delete=models.CASCADE, related_name="check_order_connect", null=True)
+    #운행 1시간 30분 전
     wake_time = models.CharField(verbose_name='기상확인시간', max_length=16, null=False, blank=True)
+    #운행 1시간 전
     drive_time = models.CharField(verbose_name='운행시작시간', max_length=16, null=False, blank=True)
+    #운행 20분 전
     departure_time = models.CharField(verbose_name='출발지도착시간', max_length=16, null=False, blank=True)
     connect_check = models.CharField(verbose_name='배차확인여부', max_length=1, null=False, blank=True)
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
@@ -266,15 +269,21 @@ class DrivingHistory(models.Model):
         if self.order_connect_id:
             connect = self.order_connect_id
             order = connect.order_id
+            work_type = '일반'
         elif self.regularly_connect_id:
             connect = self.regularly_connect_id
             order = connect.regularly_id
+            work_type = order.work_type
         else:
             return {}
         return {
             "bus" : connect.bus_id.vehicle_num,
             'departure' : order.departure,
             'arrival' : order.arrival,
+            'departure_date' : connect.departure_date,
+            'arrival_date' : connect.arrival_date,
+            'work_type': work_type,
+
         }
 
     submit_check = models.BooleanField(verbose_name="제출여부", null=False, default=False)
