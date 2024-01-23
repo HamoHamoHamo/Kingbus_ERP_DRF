@@ -834,19 +834,19 @@ class TeamConnectListView(APIView):
                 current_count = total_count
 
             if not current_order_connect and not current_regularly_connect:
-                data = {
-                    'member' : member.name,
-                    'member_id' : member.id,
-                    'current_count' : 0,
-                    'total_count' : 0,
-                    'bus' : '',
-                    'route' : '',
-                    'departure_time' : '',
-                    'check1' : '',
-                    'check2' : '',
-                    'check3' : '',
-                }
-                data_list.append(data)
+                #data = {
+                #    'member' : member.name,
+                #    'member_id' : member.id,
+                #    'current_count' : 0,
+                #    'total_count' : 0,
+                #    'bus' : '',
+                #    'route' : '',
+                #    'departure_time' : '',
+                #    'check1' : '',
+                #    'check2' : '',
+                #    'check3' : '',
+                #}
+                #data_list.append(data)
                 continue
             elif (not current_order_connect and current_regularly_connect) or \
                 (current_order_connect and current_regularly_connect and \
@@ -868,15 +868,21 @@ class TeamConnectListView(APIView):
             check_time3 = datetime.strftime(temp_time - timedelta(minutes=20), "%H:%M")
             current_time = datetime.strftime(datetime.now(), "%H:%M")
 
-            check1 = 'true'
-            check2 = 'true'
-            check3 = 'true'
+            check1 = ''
+            check2 = ''
+            check3 = ''
             if current_time > check_time1 and not driver_check.wake_time:
                 check1 = 'false'
+            elif driver_check.wake_time:
+                check1 = 'true'
             if current_time > check_time2 and not driver_check.drive_time:
                 check2 = 'false'
+            elif driver_check.drive_time:
+                check2 = 'true'
             if current_time > check_time3 and not driver_check.departure_time:
                 check3 = 'false'
+            elif driver_check.departure_time:
+                check3 = 'true'
 
             data = {
                 'member' : member.name,
