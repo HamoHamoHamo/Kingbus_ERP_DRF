@@ -6,8 +6,7 @@ from django.shortcuts import get_object_or_404
 from .models import DispatchOrderWaypoint, DispatchOrder, DispatchRegularly, \
     DispatchRegularlyConnect, DispatchOrderConnect, DriverCheck, ConnectRefusal, \
     DispatchRegularlyWaypoint, DispatchRegularlyRouteKnow, DispatchRegularlyData, \
-    RegularlyGroup, MorningChecklist, EveningChecklist, DrivingHistory, \
-    DailyChecklist, WeeklyChecklist, EquipmentChecklist
+    RegularlyGroup, MorningChecklist, EveningChecklist, DrivingHistory
 from crudmember.models import Category
 from humanresource.models import Member
 
@@ -300,23 +299,6 @@ class DrivingHistorySerializer(serializers.ModelSerializer):
         representation = super().to_representation(instance)
         representation['member'] = Member.objects.get(id=representation['member']).name if representation['member'] else None
         return representation
-
-class DailyChecklistSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DailyChecklist
-        fields = "__all__"
-
-
-class WeeklyChecklistSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = WeeklyChecklist
-        fields = "__all__"
-
-
-class EquipmentChecklistSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EquipmentChecklist
-        fields = "__all__"
 
 class TeamRegularlyConnectSerializer(serializers.ModelSerializer):
     departure_time = serializers.SerializerMethodField()
