@@ -1,8 +1,11 @@
 from datetime import datetime, timedelta
+from enum import Enum
+import os
 from dateutil.relativedelta import relativedelta
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, render
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.files.storage import FileSystemStorage
 from rest_framework_simplejwt import views as jwt_views
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
@@ -13,13 +16,16 @@ from rest_framework.decorators import api_view, renderer_classes
 from rest_framework.renderers import JSONRenderer, TemplateHTMLRenderer
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from my_settings import MAINTENANCE
+from trp_drf.settings import BASE_DIR
+from my_settings import CLOUD_MEDIA_PATH, MAINTENANCE
 from trp_drf.pagination import Pagination
 from trp_drf.settings import DATE_FORMAT
 from django.http import Http404, HttpResponse, HttpResponseNotAllowed
+from PIL import Image
+from media_firebase import upload_to_firebase
 
-from .serializers import UserLoginSerializer, MemberListSerializer, MemberSerializer
-from .models import Member, Salary, SalaryChecked
+from .serializers import UserLoginSerializer, MemberListSerializer, MemberSerializer, AccidentCaseSereializer
+from .models import Member, Salary, SalaryChecked, AccidentCase
 from dispatch.models import DispatchRegularlyConnect, DispatchOrderConnect
 
 WEEK = ['(월)', '(화)', '(수)', '(목)', '(금)', '(토)', '(일)', ]
@@ -372,3 +378,60 @@ class TokenRefreshView(jwt_views.TokenRefreshView):
                 'message' : serializer.errors,
             }
             return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+class DocumentType(Enum):
+    picture_our_vehicle = '내 차량'
+    picture_thier_vehicle = '상대방 차량'
+    picture_all_vehicles = '내 차량/상대방 차량'
+    picture_from_far = '먼 사진'
+    picture_from_close = '가까운 사진'
+    picture_passenger_list = '승객 명단 파일'
+
+
+class AccidentReportView(APIView):
+    def file_upload(self, files, tmp_path):
+        uploaded_paths = list()
+        for file in files:
+            if file:
+                tmp_file = FileSystemStorage(location=tmp_path).save(file.name, file)
+                tmp_filepath = os.path.join(tmp_path,tmp_file)
+                try:
+                    upload_file_path = f'{CLOUD_MEDIA_PATH}{AccidentCase.get_file_path()}_{file}'
+                    print(upload_file_path)
+                    upload_to_firebase(tmp_filepath, upload_file_path)
+                    uploaded_paths.append(upload_file_path)
+                    os.remove(tmp_filepath)
+                    
+                except Exception as e:
+                    print("Firebase upload error", e)
+                    #파이어베이스 업로드 실패 시 파일 삭제
+                    os.remove(tmp_filepath)
+                    # file.delete()
+            
+        return uploaded_paths
+
+    def post(self, request):
+        data = request.data
+        data['member'] = request.user.id
+        data['date'] = str(datetime.now())[:16]
+        data['creator'] = request.user.id
+        try:
+            # file_paths = dict(map(lambda item: (item.name, ''), DocumentType))
+            for document_type in DocumentType:
+                files = request.FILES.getlist(document_type.name)
+                tmp_path = os.path.join(BASE_DIR,'tmp',document_type.name)
+                data[document_type.name] = ','.join(self.file_upload(files, tmp_path))
+        except Exception as e:
+            return Response({"error": f'{e}', "message": "File Save Error."}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = AccidentCaseSereializer(data=data)
+        if serializer.is_valid(raise_exception=True):
+
+            serializer.save()
+            response = {
+                'data' : serializer.data,
+                'success': True,
+            }
+            return Response(response, status=status.HTTP_201_CREATED)
+        else:
+            return Response({"message": "Request Body Error."}, status=status.HTTP_400_BAD_REQUEST)
+
