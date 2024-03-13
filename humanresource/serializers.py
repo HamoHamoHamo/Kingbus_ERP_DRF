@@ -2,7 +2,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.hashers import check_password
 
-from .models import Member
+from .models import Member, AccidentCase
 
 class UserLoginSerializer(serializers.Serializer):
     user_id = serializers.CharField(max_length=100)
@@ -62,3 +62,10 @@ class MemberSerializer(serializers.ModelSerializer):
 	class Meta:
 		model = Member
 		fields = ['id', 'user_id', 'name', 'role', 'phone_num', 'base', 'service_allowance', 'annual_allowance', 'performance_allowance', 'meal']
+            
+class AccidentCaseSereializer(serializers.ModelSerializer):
+    class Meta:
+        model = AccidentCase
+        fields = ['member','date','creator','carnum','route_name','accident_description', 'picture_our_vehicle', 'picture_thier_vehicle', 'picture_all_vehicles', 'picture_from_far', 'picture_from_close', 'picture_passenger_list']
+        # 'kind_of_accident','damaged_car','accident_location','accident_time_occur','accident_time_solve','vehicle_speed','passenger_count',
+
