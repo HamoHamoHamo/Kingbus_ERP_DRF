@@ -3,9 +3,21 @@ from crudmember.models import Category
 from humanresource.models import Member
 from vehicle.models import Vehicle
 
+class BusinessEntity(models.Model):
+    name = models.CharField(verbose_name='사업장 이름', max_length=50, null=False, unique=True)
+    number = models.IntegerField(verbose_name='순번', null=False, default=999)
+    regularly_groups = models.ManyToManyField('RegularlyGroup', blank=True)
+    pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
+    creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="business_creator", db_column="creator_id", null=True)
+    
+    def __str__(self):
+        return self.name
+
+
 class RegularlyGroup(models.Model):
     name = models.CharField(verbose_name='그룹 이름', max_length=50, null=False, unique=True)
-    number = models.IntegerField(verbose_name='순번', null=False, default=999 )
+    number = models.IntegerField(verbose_name='순번', null=False, default=999)
     fix = models.CharField(verbose_name='고정', max_length=1, null=False, default='n')
     settlement_date = models.CharField(verbose_name='정산일', max_length=5, null=False, default='1')
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
@@ -15,7 +27,7 @@ class RegularlyGroup(models.Model):
     def __str__(self):
         return str(self.number) + self.name
 
-class DispatchRegularlyData(models.Model):
+class DispatchRegularlyData(models.Model):   
     group = models.ForeignKey(RegularlyGroup, verbose_name='그룹', related_name="regularly", on_delete=models.SET_NULL, null=True)
     references = models.CharField(verbose_name='참조사항', max_length=100, null=False, blank=True)
     departure = models.CharField(verbose_name='출발지', max_length=200, null=False)
@@ -24,6 +36,8 @@ class DispatchRegularlyData(models.Model):
     arrival_time = models.CharField(verbose_name='복귀시간', max_length=10, null=False)
     price = models.CharField(verbose_name='계약금액', max_length=100, null=False, default=0)
     driver_allowance = models.CharField(verbose_name='기사수당', max_length=100, null=False, default=0)
+    driver_allowance2 = models.CharField(verbose_name='기사수당(변경)', max_length=100, null=False, default=0)
+    outsourcing_allowance = models.CharField(verbose_name='용역수당', max_length=100, null=False, default=0)
     number1 = models.CharField(verbose_name='순번1', max_length=100, null=False, default=0)
     number2 = models.CharField(verbose_name='순번2', max_length=100, null=False, default=0)
     num1 = models.IntegerField(verbose_name='순번1숫자만', null=True)
@@ -35,14 +49,15 @@ class DispatchRegularlyData(models.Model):
     detailed_route = models.TextField(verbose_name='상세노선', null=False, blank=True)
     maplink = models.CharField(verbose_name='카카오맵', max_length=100, null=False, blank=True)
     use = models.CharField(verbose_name='사용여부', max_length=50, null=False, blank=True, default='사용')
-    
+    distance = models.CharField(verbose_name='거리', max_length=50, null=False, blank=True)
+
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
     creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="regularly_creator", db_column="creator_id", null=True)
     def __str__(self):
         return self.route
 
-class DispatchRegularly(models.Model):
+class DispatchRegularly(models.Model):   
     regularly_id = models.ForeignKey(DispatchRegularlyData, verbose_name='정기배차 데이터', related_name="monthly", on_delete=models.SET_NULL, null=True)
     edit_date = models.CharField(verbose_name='수정기준일', max_length=50, null=False, blank=True)
     group = models.ForeignKey(RegularlyGroup, verbose_name='그룹', related_name="regularly_monthly", on_delete=models.SET_NULL, null=True)
@@ -53,6 +68,8 @@ class DispatchRegularly(models.Model):
     arrival_time = models.CharField(verbose_name='복귀시간', max_length=10, null=False)
     price = models.CharField(verbose_name='계약금액', max_length=100, null=False, default=0)
     driver_allowance = models.CharField(verbose_name='기사수당', max_length=100, null=False, default=0)
+    driver_allowance2 = models.CharField(verbose_name='기사수당(변경)', max_length=100, null=False, default=0)
+    outsourcing_allowance = models.CharField(verbose_name='용역수당', max_length=100, null=False, default=0)
     number1 = models.CharField(verbose_name='순번1', max_length=100, null=False, default=0)
     number2 = models.CharField(verbose_name='순번2', max_length=100, null=False, default=0)
     num1 = models.IntegerField(verbose_name='순번1숫자만', null=True)
@@ -64,6 +81,7 @@ class DispatchRegularly(models.Model):
     detailed_route = models.TextField(verbose_name='상세노선', null=False, blank=True)
     maplink = models.CharField(verbose_name='카카오맵', max_length=100, null=False, blank=True)
     use = models.CharField(verbose_name='사용여부', max_length=50, null=False, blank=True, default='사용')
+    distance = models.CharField(verbose_name='거리', max_length=50, null=False, blank=True)
     
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
@@ -105,13 +123,14 @@ class DispatchOrder(models.Model):
     reservation_company = models.CharField(verbose_name='예약회사', max_length=100, null=False, blank=True)
     operating_company = models.CharField(verbose_name='운행회사', max_length=100, null=False, blank=True)
     price = models.CharField(verbose_name='계약금액', max_length=30, null=False, default=0)
-    driver_allowance = models.CharField(verbose_name='기사수당', max_length=30, null=False, default=0)
+    driver_allowance = models.CharField(verbose_name='상여금', max_length=30, null=False, default=0)
     option = models.CharField(verbose_name='버스옵션', max_length=100, null=False, blank=True)
     cost_type = models.CharField(verbose_name='비용구분', max_length=100, null=False, blank=True)
     bill_place = models.CharField(verbose_name='계산서 발행처', max_length=100, null=False, blank=True)
     collection_type = models.CharField(verbose_name='수금구분', max_length=100, null=False, blank=True)
     payment_method = models.CharField(verbose_name='결제방법', max_length=100, null=False)
     VAT = models.CharField(verbose_name='VAT포함여부', max_length=1, null=False, default='n')
+    total_price = models.CharField(verbose_name='VAT포함 금액', max_length=30, null=False, blank=True)
     ticketing_info = models.CharField(verbose_name='표찰정보', max_length=100, null=False, blank=True)
     order_type = models.CharField(verbose_name='유형', max_length=100, null=False, blank=True)
     references = models.CharField(verbose_name='참조사항', max_length=100, null=False, blank=True)
@@ -191,11 +210,8 @@ class Schedule(models.Model):
 class DriverCheck(models.Model):
     regularly_id = models.OneToOneField(DispatchRegularlyConnect, on_delete=models.CASCADE, related_name="check_regularly_connect", null=True)
     order_id = models.OneToOneField(DispatchOrderConnect, on_delete=models.CASCADE, related_name="check_order_connect", null=True)
-    #운행 1시간 30분 전
     wake_time = models.CharField(verbose_name='기상확인시간', max_length=16, null=False, blank=True)
-    #운행 1시간 전
     drive_time = models.CharField(verbose_name='운행시작시간', max_length=16, null=False, blank=True)
-    #운행 20분 전
     departure_time = models.CharField(verbose_name='출발지도착시간', max_length=16, null=False, blank=True)
     connect_check = models.CharField(verbose_name='배차확인여부', max_length=1, null=False, blank=True)
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
