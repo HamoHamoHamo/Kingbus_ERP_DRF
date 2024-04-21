@@ -1,9 +1,9 @@
+import os
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.http import Http404, JsonResponse
-
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.generics import ListAPIView
@@ -11,8 +11,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-
-from trp_drf.settings import DATE_FORMAT, TODAY
+from trp_drf.settings import DATE_FORMAT, TODAY, BASE_DIR
+from common.firebase_file import upload_files
 from trp_drf.pagination import Pagination
 from humanresource.models import Member
 from .models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory
@@ -193,6 +193,20 @@ class ConnectCheckView(APIView):
         data['creator'] = request.user.id
         data['route'] = route
         
+        try:
+            files = request.FILES.getlist('files', None)
+            tmp_path = os.path.join(BASE_DIR, 'media/tmp')
+            data['files'] = ','.join(upload_files(files, tmp_path, ConnectRefusal))
+        except Exception as e:
+            response = {
+                'result' : 'false',
+                'data' : '1',
+                'message': {
+                    'error' : f"File Save Error. {e}"
+                },
+            }
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
         serializer = ConnectRefusalSerializer(data=data)
         if serializer.is_valid(raise_exception=True):
             driver_check.connect_check = 0
