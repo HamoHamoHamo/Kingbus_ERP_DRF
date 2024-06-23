@@ -4,6 +4,7 @@ from humanresource.models import Member
 from vehicle.models import Vehicle
 from datetime import datetime
 from uuid import uuid4
+from django.core.exceptions import BadRequest
 
 class BusinessEntity(models.Model):
     name = models.CharField(verbose_name='사업장 이름', max_length=50, null=False, unique=True)
@@ -29,8 +30,9 @@ class RegularlyGroup(models.Model):
     def __str__(self):
         return str(self.number) + self.name
 
-class DispatchRegularlyData(models.Model):   
+class DispatchRegularlyData(models.Model):
     group = models.ForeignKey(RegularlyGroup, verbose_name='그룹', related_name="regularly", on_delete=models.SET_NULL, null=True)
+    station = models.ManyToManyField("Station", related_name="regularly_data", through="DispatchRegularlyDataStation")
     references = models.CharField(verbose_name='참조사항', max_length=100, null=False, blank=True)
     departure = models.CharField(verbose_name='출발지', max_length=200, null=False)
     arrival = models.CharField(verbose_name='도착지', max_length=200, null=False)
@@ -52,6 +54,9 @@ class DispatchRegularlyData(models.Model):
     maplink = models.CharField(verbose_name='카카오맵', max_length=100, null=False, blank=True)
     use = models.CharField(verbose_name='사용여부', max_length=50, null=False, blank=True, default='사용')
     distance = models.CharField(verbose_name='거리', max_length=50, null=False, blank=True)
+    time = models.CharField(verbose_name='운행시간(분)', max_length=50, null=False, blank=True)
+    distance_list = models.CharField(verbose_name="정류장별 거리", max_length=500, null=False, blank=True)
+    time_list = models.CharField(verbose_name="정류장별 시간", max_length=500, null=False, blank=True)
 
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
@@ -59,10 +64,11 @@ class DispatchRegularlyData(models.Model):
     def __str__(self):
         return self.route
 
-class DispatchRegularly(models.Model):   
+class DispatchRegularly(models.Model):
     regularly_id = models.ForeignKey(DispatchRegularlyData, verbose_name='정기배차 데이터', related_name="monthly", on_delete=models.SET_NULL, null=True)
     edit_date = models.CharField(verbose_name='수정기준일', max_length=50, null=False, blank=True)
     group = models.ForeignKey(RegularlyGroup, verbose_name='그룹', related_name="regularly_monthly", on_delete=models.SET_NULL, null=True)
+    station = models.ManyToManyField("Station", related_name="regularly", through="DispatchRegularlyStation")
     references = models.CharField(verbose_name='참조사항', max_length=100, null=False, blank=True)
     departure = models.CharField(verbose_name='출발지', max_length=200, null=False)
     arrival = models.CharField(verbose_name='도착지', max_length=200, null=False)
@@ -84,6 +90,9 @@ class DispatchRegularly(models.Model):
     maplink = models.CharField(verbose_name='카카오맵', max_length=100, null=False, blank=True)
     use = models.CharField(verbose_name='사용여부', max_length=50, null=False, blank=True, default='사용')
     distance = models.CharField(verbose_name='거리', max_length=50, null=False, blank=True)
+    time = models.CharField(verbose_name='운행시간(분)', max_length=50, null=False, blank=True)
+    distance_list = models.CharField(verbose_name="정류장별 거리", max_length=500, null=False, blank=True)
+    time_list = models.CharField(verbose_name="정류장별 시간", max_length=500, null=False, blank=True)
     
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
@@ -139,6 +148,10 @@ class DispatchOrder(models.Model):
     driver_lease = models.CharField(verbose_name='인력임대차', max_length=100, null=False, blank=True)
     vehicle_lease = models.CharField(verbose_name='차량임대차', max_length=100, null=False, blank=True)
     route = models.CharField(verbose_name='노선이름', max_length=500, null=False)
+    distance = models.CharField(verbose_name='거리', max_length=50, null=False, blank=True)
+    time = models.CharField(verbose_name='운행시간(분)', max_length=50, null=False, blank=True)
+    distance_list = models.CharField(verbose_name="정류장별 거리", max_length=500, null=False, blank=True)
+    time_list = models.CharField(verbose_name="정류장별 시간", max_length=500, null=False, blank=True)
     
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
@@ -146,16 +159,20 @@ class DispatchOrder(models.Model):
     def __str__(self):
         return self.route
         
-class DispatchOrderWaypoint(models.Model):
-    order_id = models.ForeignKey(DispatchOrder, on_delete=models.CASCADE, related_name="waypoint", db_column="order_id", null=False)
-    waypoint = models.CharField(verbose_name='경유지', max_length=100, null=False)
+class DispatchOrderStation(models.Model):
+    order_id = models.ForeignKey(DispatchOrder, on_delete=models.CASCADE, related_name="station", db_column="order_id", null=False)
+    station_name = models.CharField(verbose_name='경유지명', max_length=100, null=False)
+    place_name = models.CharField(verbose_name='장소이름', max_length=100, null=False, blank=True)
+    address = models.CharField(verbose_name='경유지 주소', max_length=100, null=False, blank=True)
+    longitude = models.CharField(verbose_name='경도 x', max_length=100, null=False, blank=True)
+    latitude = models.CharField(verbose_name='위도 y', max_length=100, null=False, blank=True)
     time = models.CharField(verbose_name='시간', max_length=5, null=False, blank=True)
     delegate = models.CharField(verbose_name='인솔자', max_length=100, null=False, blank=True)
     delegate_phone = models.CharField(verbose_name='인솔자 전화번호', max_length=100, null=False, blank=True)
     
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
-    creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="waypoint_creator", db_column="creator_id", null=True)
+    creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="order_station_creator", db_column="creator_id", null=True)
 
 class DispatchOrderConnect(models.Model):
     order_id = models.ForeignKey(DispatchOrder, on_delete=models.CASCADE, related_name="info_order", db_column="order_id", null=False)
@@ -164,6 +181,7 @@ class DispatchOrderConnect(models.Model):
     outsourcing = models.CharField(verbose_name='용역', max_length=1, null=False, default='n')
     departure_date = models.CharField(verbose_name='출발날짜', max_length=16, null=False)
     arrival_date = models.CharField(verbose_name='도착날짜', max_length=16, null=False)
+    work_type = models.CharField(verbose_name='일반', max_length=2, null=False, default='일반')
     price = models.CharField(verbose_name='계약금액', max_length=40, null=False)
     driver_allowance = models.CharField(verbose_name='기사수당', max_length=40, null=False)
     payment_method = models.CharField(verbose_name='상여금 선지급', max_length=1, null=False, default="n")
@@ -225,7 +243,7 @@ class ConnectRefusal(models.Model):
         ymd_path = datetime.now().strftime('%Y/%m/%d')
         uuid_name = uuid4().hex
         return '/'.join(['dispatch/refusal', ymd_path, uuid_name])
-    
+
     regularly_id = models.OneToOneField(DispatchRegularlyConnect, on_delete=models.SET_NULL, related_name="refusal_regularly_connect", null=True)
     order_id = models.OneToOneField(DispatchOrderConnect, on_delete=models.SET_NULL, related_name="refusal_order_connect", null=True)
     driver_id = models.ForeignKey(Member, on_delete=models.CASCADE, related_name="refusal_driver_id", null=False)
@@ -324,3 +342,59 @@ class DrivingHistory(models.Model):
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
     creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="driving_history_creator", db_column="creator_id", null=True)
+
+class Station(models.Model):
+    TYPES_CHOICES = [
+        '차고지',
+        '첫 정류장 대기장소',
+        '정류장',
+        '사업장',
+        '대기장소',
+        '마지막 정류장',
+    ]
+
+    def set_types(self, type_list):
+        for type in type_list:
+            if not type in self.TYPES_CHOICES:
+                raise BadRequest('정류장 종류의 값이 올바르지 않습니다.')
+        self.station_type = ', '.join(type_list)
+
+    def get_types(self):
+        return self.station_type.split(', ') if self.station_type else None
+
+    name = models.CharField(verbose_name="정류장명", max_length=100, null=False)
+    address = models.CharField(verbose_name="주소", max_length=100, null=False)
+    latitude = models.CharField(verbose_name="위도", max_length=100, null=False)
+    longitude = models.CharField(verbose_name="경도", max_length=100, null=False)
+    references = models.CharField(verbose_name="참조사항", max_length=100, null=False, blank=True)
+    station_type = models.CharField(verbose_name="종류", max_length=100, null=False, blank=True)
+    pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
+    creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="station_creator", db_column="creator_id", null=True)
+
+class DispatchRegularlyDataStation(models.Model):
+    regularly_data = models.ForeignKey(DispatchRegularlyData, on_delete=models.CASCADE, related_name="regularly_data_station", null=False)
+    station = models.ForeignKey(Station, on_delete=models.CASCADE, related_name="station_regularly_data", null=False)
+    index = models.IntegerField(verbose_name='순번')
+    station_type = models.CharField(verbose_name="종류", max_length=100, null=False)
+    time = models.CharField(verbose_name="시각", max_length=100, null=False)
+
+    pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
+    creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="regularly_data_station_creator", db_column="creator_id", null=True)
+
+    def __str__(self):
+        return f'{self.regularly_data.route} {self.station.name} {self.index} {self.station_type} {self.time}'
+    
+class DispatchRegularlyStation(models.Model):
+    regularly = models.ForeignKey(DispatchRegularly, on_delete=models.CASCADE, related_name="regularly_station", null=False)
+    station = models.ForeignKey(Station, on_delete=models.CASCADE, related_name="station_regularly", null=False)
+    index = models.IntegerField(verbose_name='순번')
+    station_type = models.CharField(verbose_name="종류", max_length=100, null=False)
+    time = models.CharField(verbose_name="시각", max_length=100, null=False)
+
+    pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
+    creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="regularly_station_creator", db_column="creator_id", null=True)
+    def __str__(self):
+        return f'{self.regularly.route} {self.station.name} {self.index} {self.station_type} {self.time}'

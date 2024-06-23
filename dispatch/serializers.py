@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from rest_framework import serializers
 from django.shortcuts import get_object_or_404
 
-from .models import DispatchOrderWaypoint, DispatchOrder, DispatchRegularly, \
+from .models import DispatchOrderStation, DispatchOrder, DispatchRegularly, \
     DispatchRegularlyConnect, DispatchOrderConnect, DriverCheck, ConnectRefusal, \
     DispatchRegularlyWaypoint, DispatchRegularlyRouteKnow, DispatchRegularlyData, \
     RegularlyGroup, MorningChecklist, EveningChecklist, DrivingHistory
@@ -51,13 +51,19 @@ class DispatchRegularlyConnectSerializer(serializers.ModelSerializer):
         model = DispatchRegularlyConnect
         fields = ['id', 'price', 'driver_allowance', 'work_type', 'route', 'location', 'check_regularly_connect', 'detailed_route', 'maplink', 'group', 'references', 'departure', 'arrival', 'week', 'route', 'departure_date', 'arrival_date', 'bus_id', 'price', 'driver_allowance', 'waypoint']
 
-class DispatchOrderWaypointSerializer(serializers.ModelSerializer):
+class DispatchOrderStationSerializer(serializers.ModelSerializer):
+    waypoint = serializers.SerializerMethodField()
+
     class Meta:
-        model = DispatchOrderWaypoint
-        fields = ['waypoint', 'time', 'delegate', 'delegate_phone']
+        model = DispatchOrderStation
+        fields = ['station_name', 'time', 'delegate', 'delegate_phone', 'waypoint']
+
+    def get_waypoint(self, obj):
+        return obj.station_name
+
 
 class DispatchOrderSerializer(serializers.ModelSerializer):
-    waypoint = DispatchOrderWaypointSerializer(many=True)
+    waypoint = DispatchOrderStationSerializer(many=True)
 
 
     class Meta:
@@ -66,7 +72,7 @@ class DispatchOrderSerializer(serializers.ModelSerializer):
         fields = ['waypoint']
 
 class DispatchOrderConnectSerializer(serializers.ModelSerializer):
-    waypoint = DispatchOrderWaypointSerializer(many=True, source="order_id.waypoint")
+    waypoint = DispatchOrderStationSerializer(many=True, source="order_id.station")
     # waypoint = serializers.ReadOnlyField(source="order_id__waypoint")
     operation_type = serializers.ReadOnlyField(source="order_id.operation_type")
     bus_type = serializers.ReadOnlyField(source="order_id.bus_type")
