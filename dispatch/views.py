@@ -12,14 +12,22 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from trp_drf.settings import DATE_FORMAT, TODAY, BASE_DIR
-from common.firebase_file import upload_files
+from firebase.firebase_file import upload_files
 from trp_drf.pagination import Pagination
 from humanresource.models import Member
-from .models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory
+from .models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrder, DispatchOrderStation
 from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, \
     DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, DrivingHistorySerializer, \
     DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer, MorningChecklistSerializer, EveningChecklistSerializer, \
-    TeamRegularlyConnectSerializer, TeamOrderConnectSerializer
+    TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer
+from my_settings import SUNGHWATOUR_CRED_PATH, CRED_PATH
+import firebase_admin
+from firebase.firebase import init_sunghwatour_firebase, init_firebase
+from firebase_admin import firestore, firestore_async, credentials
+from asgiref.sync import sync_to_async
+from google.oauth2 import service_account
+import subprocess
+import time
 
 def get_invalid_date_format_response():
     response = {
@@ -775,3 +783,162 @@ class ResetConnectCheck(APIView):
             connect_refusal.delete()
 
         return Response(response, status=status.HTTP_200_OK)
+
+# rpa-p
+class EstimateView(APIView):
+    def post(self, request):
+
+        departure = request.data['departure']['name']
+        arrival = request.data['arrival']['name']
+
+        stopover = []
+        for item in request.data["stopover"]:
+            stopover.append(item['name'])
+        
+        data = {
+            "departure" : departure,
+            "arrival" : arrival,
+            "departure_date" : request.data['departureDate'],
+            "arrival_date" : request.data['arrivalDate'],
+            "bus_cnt" : request.data['busCount'],
+            "bus_type" : request.data['busType'],
+            "customer" : request.data['signedName'],
+            "customer_phone" : request.data['phone'],
+            "contract_status" : "보류",
+            "operation_type" : f"{request.data['kindsOfEstimate']} ({request.data['operationType']})" if request.data['operationType'] else request.data['kindsOfEstimate'],
+            "reservation_company" : "RPA-P",
+            "operating_company" : "성화투어",
+            "price" : request.data['price'],
+            "driver_allowance" : 0,
+            # "option" : "",
+            # "cost_type" : "",
+            # "bill_place" : "",
+            # "collection_type" : "",
+            "payment_method" : request.data['payWay'],
+            "VAT" : "y",
+            # "total_price" : ,
+            # "ticketing_info" : request.data[''],
+            # "order_type" : request.data[''],
+            "references" : f"{TODAY} RPA-P로 예약됨",
+            # "driver_lease" : request.data[''],
+            # "vehicle_lease" : request.data[''],
+            "route" : f"{departure} ▶ {arrival}",
+            "distance" : request.data['distance'],
+            "time" : request.data['duration'],
+            # "distance_list" : request.data[''],
+            # "time_list" : request.data[''],
+            "creator" : request.user.id
+        }
+
+        
+        serializer = DispatchOrderEstimateSerializer(data=data)
+        if serializer.is_valid():
+            order = serializer.save()
+        else:
+            return Response({
+                'result': 'false',
+                'data': '1',
+                'message': {
+                    'error' : serializer.errors
+                }
+            }, 
+            status=status.HTTP_400_BAD_REQUEST
+            )
+
+        station_list = request.data['stopover'] if request.data['stopover'] else []
+        station_list.append(request.data['departure'])
+        station_list.append(request.data['arrival'])
+        station_list = sorted(station_list, key=lambda x: x['index'])
+
+        for station_data in station_list:
+            data = {
+                "order_id" : order.id,
+                "station_name" : station_data['name'],
+                "place_name" : station_data['name'],
+                "address" : station_data['address'],
+                "longitude" : station_data['longitude'],
+                "latitude" : station_data['latitude'],
+                # "time" : ,
+                # "delegate" : ,
+                # "delegate_phone" : ,
+                "creator" : request.user.id
+            }
+            station_serializer = DispatchOrderStationEstimateSerializer(data=data)
+            if station_serializer.is_valid():
+                station_serializer.save()
+            else:
+                return Response({
+                    'result': 'false',
+                    'data': '2',
+                    'message': {
+                        'error' : station_serializer.errors
+                    }
+                }, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # init firebase
+        
+        init_sunghwatour_firebase()
+        db = firestore.Client()
+        
+        estimate_ref = db.collection("User").document(request.data['uid']).collection("Estimate")
+        new_ref = estimate_ref.add({
+            "departure" : departure,
+            "arrival" : arrival,
+            "departureDate" : request.data['departureDate'],
+            "arrivalDate" : request.data['arrivalDate'],
+            "stopover" : stopover,
+            "busCount" : request.data['busCount'],
+            "busType" : request.data['busType'],
+            "signedName" : request.data['signedName'],
+            "phone" : request.data['phone'],
+            "kindsOfEstimate" : request.data['kindsOfEstimate'],
+            "operationType" : request.data['operationType'],
+            "price" : request.data['price'],
+            "payWay" : request.data['payWay'],
+            "distance" : request.data['distance'],
+            "duration" : request.data['duration'],
+            "number" : request.data["number"],
+            "isCompletedReservation" : request.data["isCompletedReservation"],
+            "isPriceChange" : request.data["isPriceChange"],
+            "isEstimateApproval" : request.data["isEstimateApproval"],
+            "departureIndex" : request.data["departureIndex"],
+        })
+
+        # print("stopover", request.data["stopover"])
+        # address_list = []
+        # address_list.append(request.data["departure"])
+        # address_list.append(request.data["arrival"])
+        # for item in request.data["stopover"]:
+        #     address_list.append(item)
+
+        # print("address", request.data["departure"])
+        # print("arrival", request.data["arrival"])
+        # print("stopover", request.data["stopover"])
+
+        for address in station_list:
+            estimate_ref.document(new_ref[1].id).collection("EstimateAddress").add(address)
+        
+        print("ESTIMTAS", new_ref[1].id)
+        response = {
+            'result': 'true',
+            'data': new_ref[1].id,
+            'message': ''
+        }
+        return Response(response, status=status.HTTP_200_OK)
+
+# async def do_async():
+#     try:
+#         await fetch_firestore_data()
+#         print("success")
+#     except Exception as e:
+#         print("ERROR", e)
+    
+
+# async def fetch_firestore_data():
+#     db = firestore.Client()
+#     print("TEST", db)
+    
+#     # sync_to_async를 사용하여 동기 메서드 비동기 호출
+#     await sync_to_async(db.collection("cities2").document("LA").set)({"test": "test"})

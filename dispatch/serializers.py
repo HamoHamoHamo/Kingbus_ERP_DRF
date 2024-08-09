@@ -391,3 +391,13 @@ class TeamOrderConnectSerializer(serializers.ModelSerializer):
             problem = '첫 정류장 문제 발생'
 
         return problem
+
+class DispatchOrderEstimateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DispatchOrder
+        fields = '__all__'
+
+class DispatchOrderStationEstimateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DispatchOrderStation
+        fields = '__all__'

@@ -22,7 +22,7 @@ from trp_drf.pagination import Pagination
 from trp_drf.settings import DATE_FORMAT
 from django.http import Http404, HttpResponse, HttpResponseNotAllowed
 from PIL import Image
-from media_firebase import upload_to_firebase
+from firebase.media_firebase import upload_to_firebase
 
 from .serializers import UserLoginSerializer, MemberListSerializer, MemberSerializer, AccidentCaseSereializer
 from .models import Member, Salary, SalaryChecked, AccidentCase

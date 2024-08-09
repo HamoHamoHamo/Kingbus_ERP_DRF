@@ -1,7 +1,7 @@
 import os
 from my_settings import CLOUD_MEDIA_PATH
 from django.core.files.storage import FileSystemStorage
-from media_firebase import upload_to_firebase
+from firebase.media_firebase import upload_to_firebase
 from django.db import models
 
 def upload_files(files, tmp_path, model:models.Model):

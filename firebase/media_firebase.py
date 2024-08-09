@@ -1,28 +1,21 @@
 from datetime import datetime, timedelta
 from pathlib import Path
-from firebase_admin import credentials, initialize_app, storage, _apps
+from firebase_admin import credentials, initialize_app, storage, _apps, get_app, delete_app
 import os
 from trp_drf.settings import BASE_DIR
 from my_settings import CRED_PATH, STORAGE_BUCKET, CLOUD_MEDIA_PATH
-
-def init_firebase():
-    cred = credentials.Certificate(os.path.join(BASE_DIR, CRED_PATH))
-    if not _apps:
-        initialize_app(cred, {
-            'storageBucket': STORAGE_BUCKET,
-        })
+from firebase.firebase import init_firebase
 
 def upload_to_firebase(file, file_path):
-    init_firebase()
-
+    init_firebase(os.path.join(BASE_DIR, CRED_PATH))
     bucket = storage.bucket()
     blob = bucket.blob(file_path)
-    blob.upload_from_filename(file)
+    blob.upload_from_filename(file.file.path)
 
     return
 
 def get_download_url(path):
-    init_firebase()
+    init_firebase(os.path.join(BASE_DIR, CRED_PATH))
     # Firebase Storage에서 다운로드 링크 가져오기
     bucket = storage.bucket()
     blob = bucket.blob(path)
@@ -34,7 +27,7 @@ def get_download_url(path):
     return url
 
 def delete_firebase_file(path):
-    init_firebase()
+    init_firebase(os.path.join(BASE_DIR, CRED_PATH))
     try:
         bucket = storage.bucket()
         blob = bucket.blob(path)
