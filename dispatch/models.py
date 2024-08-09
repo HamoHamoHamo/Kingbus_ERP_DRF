@@ -6,6 +6,8 @@ from datetime import datetime
 from uuid import uuid4
 from django.core.exceptions import BadRequest
 
+from common.datetime import get_hour_minute
+
 class BusinessEntity(models.Model):
     name = models.CharField(verbose_name='사업장 이름', max_length=50, null=False, unique=True)
     number = models.IntegerField(verbose_name='순번', null=False, default=999)
@@ -31,6 +33,9 @@ class RegularlyGroup(models.Model):
         return str(self.number) + self.name
 
 class DispatchRegularlyData(models.Model):
+    def get_hour_minute(self):
+        return get_hour_minute(int(self.time)) if self.time else ""
+
     group = models.ForeignKey(RegularlyGroup, verbose_name='그룹', related_name="regularly", on_delete=models.SET_NULL, null=True)
     station = models.ManyToManyField("Station", related_name="regularly_data", through="DispatchRegularlyDataStation")
     references = models.CharField(verbose_name='참조사항', max_length=100, null=False, blank=True)
@@ -65,6 +70,9 @@ class DispatchRegularlyData(models.Model):
         return self.route
 
 class DispatchRegularly(models.Model):
+    def get_hour_minute(self):
+        return get_hour_minute(int(self.time)) if self.time else ""
+    
     regularly_id = models.ForeignKey(DispatchRegularlyData, verbose_name='정기배차 데이터', related_name="monthly", on_delete=models.SET_NULL, null=True)
     edit_date = models.CharField(verbose_name='수정기준일', max_length=50, null=False, blank=True)
     group = models.ForeignKey(RegularlyGroup, verbose_name='그룹', related_name="regularly_monthly", on_delete=models.SET_NULL, null=True)
@@ -121,6 +129,9 @@ class DispatchRegularlyRouteKnow(models.Model):
         return f'{self.regularly_id.route} {self.driver_id.name}'
 
 class DispatchOrder(models.Model):
+    def get_hour_minute(self):
+        return get_hour_minute(int(self.time)) if self.time else ""
+    
     departure = models.CharField(verbose_name='출발지', max_length=200, null=False)
     arrival = models.CharField(verbose_name='도착지', max_length=200, null=False)
     departure_date = models.CharField(verbose_name='출발날짜', max_length=20, null=False)
@@ -201,6 +212,8 @@ class DispatchRegularlyConnect(models.Model):
     work_type = models.CharField(verbose_name='출/퇴근', max_length=2, null=False)
     price = models.CharField(verbose_name='계약금액', max_length=10, null=False)
     driver_allowance = models.CharField(verbose_name='기사수당', max_length=10, null=False)
+    time = models.CharField(verbose_name='시간', max_length=100, null=False, blank=True)
+    distance = models.CharField(verbose_name='거리', max_length=100, null=False, blank=True)
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
     creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="connect_regularly_creator", db_column="creator_id", null=True)

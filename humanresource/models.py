@@ -1,12 +1,18 @@
-from datetime import datetime
 from uuid import uuid4
 from django.db import models
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
+from common.constant import TODAY, WEEK, FORMAT
+from django.apps import apps
 
 class Team(models.Model):
     name =models.CharField(verbose_name='팀이름', max_length=100, null=False, blank=False)
     pub_date = models.DateTimeField(verbose_name='작성시간', auto_now_add=True, null=False)
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
 
+    def __str__(self):
+        return self.name
+    
 class Member(models.Model):
     username = None
     USERNAME_FIELD = 'user_id'
@@ -19,7 +25,7 @@ class Member(models.Model):
     password = models.TextField(verbose_name='비밀번호', null=False, blank=True)
     name = models.CharField(verbose_name='이름', max_length=100, null=False)
     role = models.CharField(verbose_name='업무', max_length=100, null=False)
-    birthdate = models.CharField(verbose_name='생년월일', max_length=100, null=False)
+    birthdate = models.CharField(verbose_name='생년월일', max_length=100, null=False, blank=True)
     resident_number1 = models.CharField(verbose_name='주민등록번호 앞자리', max_length=100, null=False, blank=True)
     resident_number2 = models.CharField(verbose_name='주민등록번호 뒷자리', max_length=100, null=False, blank=True)
     phone_num = models.CharField(verbose_name='전화번호', max_length=100, null=False)
@@ -37,17 +43,20 @@ class Member(models.Model):
     position = models.CharField(verbose_name='직급', max_length=100, null=False, blank=True)
     apprenticeship_note = models.CharField(verbose_name='견습노선 및 내용', max_length=100, null=False, blank=True)
     leave_reason = models.CharField(verbose_name='퇴사사유', max_length=100, null=False, blank=True)
-    company =models.CharField(verbose_name='소속회사', max_length=100, null=False, blank=True)
-    team =models.ForeignKey(Team, on_delete=models.SET_NULL, related_name="member_team", null=True)
-    final_opinion =models.CharField(verbose_name='최종소견', max_length=100, null=False, blank=True)
-    interviewer =models.CharField(verbose_name='면접담당자', max_length=100, null=False, blank=True)
-    end_date =models.CharField(verbose_name='종료일', max_length=100, null=False, blank=True)
-    leave_date =models.CharField(verbose_name='퇴사일', max_length=100, null=False, blank=True)
+    company = models.CharField(verbose_name='소속회사', max_length=100, null=False, blank=True)
+    team = models.ForeignKey(Team, on_delete=models.SET_NULL, related_name="member_team", null=True)
+    final_opinion = models.CharField(verbose_name='최종소견', max_length=100, null=False, blank=True)
+    interviewer = models.CharField(verbose_name='면접담당자', max_length=100, null=False, blank=True)
+    end_date = models.CharField(verbose_name='종료일', max_length=100, null=False, blank=True)
+    leave_date = models.CharField(verbose_name='퇴사일', max_length=100, null=False, blank=True)
+    allowance_type = models.CharField(verbose_name='수당지급기준', max_length=100, null=False, blank=True, default="기사수당(현재)")
+    license = models.CharField(verbose_name='버스기사자격증', max_length=100, null=False, blank=True)
 
     base = models.CharField(verbose_name='기본급', max_length=20, null=False, default=0)
     service_allowance = models.CharField(verbose_name='근속수당', max_length=20, null=False, default=0)
     annual_allowance = models.CharField(verbose_name='연차수당', max_length=20, null=False, default=0)
     performance_allowance = models.CharField(verbose_name='성과급', max_length=20, null=False, default=0)
+    overtime_allowance = models.CharField(verbose_name='근로추가수당', max_length=20, null=False, default=0)
     meal = models.CharField(verbose_name='식대', max_length=20, null=False, default=0)
     
     pub_date = models.DateTimeField(verbose_name="등록날짜", auto_now_add=True, null=False)
@@ -59,18 +68,156 @@ class Member(models.Model):
     def __str__(self):
         return self.name
 
+
+class MemberFile(models.Model):
+    def get_file_path(instance, filename):
+    
+        ymd_path = datetime.now().strftime('%Y/%m/%d')
+        uuid_name = uuid4().hex
+        return '/'.join(['humanresource/', ymd_path, uuid_name])
+
+    member_id = models.ForeignKey(Member, on_delete=models.CASCADE, related_name="member_file", db_column="member_id", null=False)
+    file = models.FileField(upload_to=get_file_path, null=False)
+    filename = models.TextField(null=True, verbose_name='첨부파일명')
+    path = models.TextField(null=True, verbose_name='경로')
+    type = models.CharField(max_length=100, null=False, verbose_name='면허증, 버스운전자격증')
+    creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="member_file_user", db_column="user_id", null=True)
+    pub_date = models.DateTimeField(verbose_name='작성시간', auto_now_add=True, null=False)
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
+    def __str__(self):
+        return self.member_id.name + "_" + self.filename
+
+# class HR(models.Model):
+#     member_id = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="hr_member", null=True)
+#     hr_type = models.CharField(verbose_name="종류", max_length=30, null=False)
+#     reason = models.CharField(verbose_name="내용", max_length=100, null=False)
+#     start_date = models.CharField(verbose_name="시작날짜", max_length=10,  null=False)
+#     end_date = models.CharField(verbose_name="종료날짜", max_length=10,  null=False)
+#     pub_date = models.DateTimeField(verbose_name="등록날짜", auto_now_add=True, null=False)
+#     creator = models.ForeignKey(Member, on_delete=models.CASCADE, related_name="hr_creator", db_column="creator_id", null=True)
+
+# class Yearly(models.Model):
+#     member_id = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="yearly_member", null=True)
+#     year = models.CharField(verbose_name="년도", max_length=4, null=False)
+#     cnt = models.CharField(verbose_name="연차 사용 개수", max_length=10, null=False)
+#     creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="yearly_creator", db_column="user_id", null=True)
+#     pub_date = models.DateTimeField(verbose_name='작성시간', auto_now_add=True, null=False)
+#     def __str__(self):
+#         return self.member_id.name
+
+
 class Salary(models.Model):
+    def new_salary(creator, month, member):
+        last_date = datetime.strftime(datetime.strptime(month+'-01', FORMAT) + relativedelta(months=1) - timedelta(days=1), FORMAT)
+        # attendance = DispatchRegularlyConnect.objects.filter(work_type='출근').filter(driver_id=member).filter(departure_date__range=(month+'-01 00:00', last_date+' 24:00')).aggregate(Sum('driver_allowance'))
+        # leave = DispatchRegularlyConnect.objects.filter(work_type='퇴근').filter(driver_id=member).filter(departure_date__range=(month+'-01 00:00', last_date+' 24:00')).aggregate(Sum('driver_allowance'))
+        # order = DispatchOrderConnect.objects.filter(driver_id=member).filter(departure_date__range=(month+'-01 00:00', last_date+' 24:00')).aggregate(Sum('driver_allowance'))
+
+        # attendance_price = 0
+        # leave_price = 0
+        # order_price = 0
+        # assignment_price = 0
+        # regularly_assignment_price = 0
+
+        base = 0
+        service_allowance = 0
+        performance_allowance = 0
+        annual_allowance = 0
+        overtime_allowance = 0
+        meal = 0
+        
+
+        if TODAY[:7] <= month:
+            base = int(member.base)
+            service_allowance = int(member.service_allowance)
+            performance_allowance = int(member.performance_allowance)
+            annual_allowance = int(member.annual_allowance)
+            overtime_allowance = int(member.overtime_allowance)
+            meal = int(member.meal)
+
+        # if salary:
+        #     base = salary.base
+        #     service_allowance = salary.service_allowance
+        #     performance_allowance = salary.performance_allowance
+
+        # Salary가 없을 때만 동작하는 함수라서 계산할 필요 없음
+        # if attendance['driver_allowance__sum']:
+        #     attendance_price = int(attendance['driver_allowance__sum'])
+        # if leave['driver_allowance__sum']:
+        #     leave_price = int(leave['driver_allowance__sum'])
+        # if order['driver_allowance__sum']:
+        #     order_price = int(order['driver_allowance__sum'])
+        
+        try:
+            Category = apps.get_model('Category', 'Model')
+            payment_date = Category.objects.get(type='급여지급일').category
+        except:
+            payment_date = 1
+
+
+        salary = Salary(
+            member_id = member,
+            base = base,
+            service_allowance = service_allowance,
+            performance_allowance = performance_allowance,
+            annual_allowance = annual_allowance,
+            overtime_allowance = overtime_allowance,
+            meal = meal,
+            # attendance = attendance_price,
+            # leave = leave_price,
+            # order = order_price,
+            # assignment = assignment_price,
+            # regularly_assignment = regularly_assignment_price,
+            attendance = 0,
+            leave = 0,
+            order = 0,
+            assignment = 0,
+            regularly_assignment = 0,
+            total = 0,
+            month = month,
+            payment_date = payment_date,
+            creator = creator
+        )
+        salary.save()
+        salary.total = salary.calculate_total()
+        return salary
+
+    def calculate_total(self):
+        member = self.member_id
+        if member.role == '용역' or member.role == '관리자':
+            return int(self.performance_allowance) + int(self.attendance) + int(self.leave) + int(self.order) + int(self.assignment) + int(self.regularly_assignment) + int(self.additional) - int(self.deduction)
+        elif (member.role == '팀장' or member.role == '운전원') and member.allowance_type == '기사수당(현재)':
+            return int(self.base) + int(self.service_allowance) + int(self.performance_allowance) + int(self.annual_allowance) + int(self.meal) + int(self.attendance) + int(self.leave) + int(self.order) + int(self.assignment) + int(self.regularly_assignment) + int(self.additional) - int(self.deduction)
+        elif (member.role == '팀장' or member.role == '운전원') and member.allowance_type == '기사수당(변경)':
+            return int(self.overtime_allowance) + int(self.performance_allowance) + int(self.attendance) + int(self.leave) + int(self.order) + int(self.assignment) + int(self.regularly_assignment) + int(self.additional) - int(self.deduction)
+        else:
+            return "error"
+
+    def calculate_fixed(self):
+        member = self.member_id
+        if member.role == '용역' or member.role == '관리자':
+            return int(self.performance_allowance)
+        elif (member.role == '팀장' or member.role == '운전원') and member.allowance_type == '기사수당(현재)':
+            return int(self.base) + int(self.service_allowance) + int(self.performance_allowance) + int(self.annual_allowance) + int(self.meal)
+        elif (member.role == '팀장' or member.role == '운전원') and member.allowance_type == '기사수당(변경)':
+            return int(self.overtime_allowance) + int(self.performance_allowance)
+        else:
+            return 0
+
     member_id = models.ForeignKey(Member, on_delete=models.CASCADE, related_name="salary", null=True)
     base = models.CharField(verbose_name='기본급', max_length=20, null=False, default=0)
     service_allowance = models.CharField(verbose_name='근속수당', max_length=20, null=False, default=0)
     performance_allowance = models.CharField(verbose_name='성과급', max_length=20, null=False, default=0)
     annual_allowance = models.CharField(verbose_name='연차수당', max_length=20, null=False, default=0)
+    overtime_allowance = models.CharField(verbose_name='근로추가수당', max_length=20, null=False, default=0)
     meal = models.CharField(verbose_name='식대', max_length=20, null=False, default=0)
     attendance = models.CharField(verbose_name='출근요금', max_length=20, null=False)
     leave = models.CharField(verbose_name='퇴근요금', max_length=20, null=False)
     order = models.CharField(verbose_name='일반주문요금', max_length=20, null=False)
     additional = models.CharField(verbose_name='추가요금', max_length=20, null=False, default=0)
     deduction = models.CharField(verbose_name='공제', max_length=20, null=False, default=0)
+    assignment = models.CharField(verbose_name='일반업무', max_length=20, null=False, default=0)
+    regularly_assignment = models.CharField(verbose_name='고정업무', max_length=20, null=False, default=0)
     total = models.CharField(verbose_name='총금액', max_length=20, null=False)
     month = models.CharField(verbose_name='지급월', null=False, max_length=7)
     payment_date = models.CharField(verbose_name='급여지급일', null=False, max_length=10, blank=True)
@@ -114,7 +261,6 @@ class SalaryChecked(models.Model):
     creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="salary_checked_user", null=True)
     pub_date = models.DateTimeField(verbose_name='작성시간', auto_now_add=True, null=False)
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
-
 
 class AccidentCase(models.Model):
     def get_file_path():

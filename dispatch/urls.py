@@ -16,4 +16,9 @@ urlpatterns = [
     path('team/list', views.TeamConnectListView.as_view()),
     path('team/<int:id>', views.TeamDriverConnectView.as_view()),
     path('test/reset-connect-check', views.ResetConnectCheck.as_view()),
+
+    # rpa-p
+    path('estimate', views.EstimateView.as_view()),
+    # path('estimate/contract')
+
 ]

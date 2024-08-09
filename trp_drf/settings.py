@@ -40,9 +40,10 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist', # 토큰 재발급 하면서 만료시켜줌
 
+    'accounting',
     'crudmember',
     'complaint',
-    'dispatch',
+    'dispatch.apps.DispatchConfig',
     'humanresource',
     'notice',
     'vehicle',
@@ -78,6 +79,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'trp_drf.wsgi.application'
+ASGI_APPLICATION = 'trp_drf.asgi.application'
 
 
 # Database
@@ -122,7 +124,7 @@ USE_TZ = False
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.0/howto/static-files/
 
-STATIC_URL = os.path.join(BASE_DIR, 'static')
+STATIC_URL = os.path.join(BASE_DIR, 'static/')
 # 미디어 파일을 관리할 루트 media 디렉터리
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # 각 media file에 대한 URL prefix
