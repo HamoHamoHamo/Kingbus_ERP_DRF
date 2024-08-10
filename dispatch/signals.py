@@ -1,7 +1,7 @@
 from django.db.models.signals import post_save, post_delete, pre_delete
 from django.dispatch import receiver
 from django.shortcuts import get_object_or_404
-from .models import  DispatchOrder
+from dispatch.models import  DispatchOrder
 from accounting.models import TotalPrice
 
 

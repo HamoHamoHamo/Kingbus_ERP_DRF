@@ -1,8 +1,12 @@
-import os
 import my_settings
 from datetime import timedelta, datetime
 from pathlib import Path
 
+import sys
+import os
+
+# 상위 폴더를 sys.path에 추가
+# sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -43,7 +47,7 @@ INSTALLED_APPS = [
     'accounting',
     'crudmember',
     'complaint',
-    'dispatch.apps.DispatchConfig',
+    'dispatch',
     'humanresource',
     'notice',
     'vehicle',

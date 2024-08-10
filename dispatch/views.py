@@ -2,7 +2,8 @@ import os
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from django.db.models import Q
-from django.shortcuts import get_object_or_404
+from django.forms.models import model_to_dict
+from django.shortcuts import get_object_or_404, render
 from django.http import Http404, JsonResponse
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -15,19 +16,17 @@ from trp_drf.settings import DATE_FORMAT, TODAY, BASE_DIR
 from firebase.firebase_file import upload_files
 from trp_drf.pagination import Pagination
 from humanresource.models import Member
-from .models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrder, DispatchOrderStation
+from dispatch.models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrder, DispatchOrderStation
 from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, \
     DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, DrivingHistorySerializer, \
     DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer, MorningChecklistSerializer, EveningChecklistSerializer, \
     TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer
 from my_settings import SUNGHWATOUR_CRED_PATH, CRED_PATH
-import firebase_admin
-from firebase.firebase import init_sunghwatour_firebase, init_firebase
-from firebase_admin import firestore, firestore_async, credentials
-from asgiref.sync import sync_to_async
-from google.oauth2 import service_account
-import subprocess
-import time
+
+
+from firebase_admin import firestore
+from firebase.rpa_p_firebase import RpaPFirebase
+
 
 def get_invalid_date_format_response():
     response = {
@@ -815,7 +814,7 @@ class EstimateView(APIView):
             # "bill_place" : "",
             # "collection_type" : "",
             "payment_method" : request.data['payWay'],
-            "VAT" : "y",
+            "VAT" : "n",
             # "total_price" : ,
             # "ticketing_info" : request.data[''],
             # "order_type" : request.data[''],
@@ -878,12 +877,7 @@ class EstimateView(APIView):
             )
 
         # init firebase
-        
-        init_sunghwatour_firebase()
-        db = firestore.Client()
-        
-        estimate_ref = db.collection("User").document(request.data['uid']).collection("Estimate")
-        new_ref = estimate_ref.add({
+        estimate = {
             "departure" : departure,
             "arrival" : arrival,
             "departureDate" : request.data['departureDate'],
@@ -901,32 +895,91 @@ class EstimateView(APIView):
             "duration" : request.data['duration'],
             "number" : request.data["number"],
             "isCompletedReservation" : request.data["isCompletedReservation"],
+            "isConfirmedReservation" : request.data["isConfirmedReservation"],
             "isPriceChange" : request.data["isPriceChange"],
             "isEstimateApproval" : request.data["isEstimateApproval"],
             "departureIndex" : request.data["departureIndex"],
-        })
-
-        # print("stopover", request.data["stopover"])
-        # address_list = []
-        # address_list.append(request.data["departure"])
-        # address_list.append(request.data["arrival"])
-        # for item in request.data["stopover"]:
-        #     address_list.append(item)
-
-        # print("address", request.data["departure"])
-        # print("arrival", request.data["arrival"])
-        # print("stopover", request.data["stopover"])
-
-        for address in station_list:
-            estimate_ref.document(new_ref[1].id).collection("EstimateAddress").add(address)
+        }
+        firebase = RpaPFirebase()
+        try:
+            estimate_uid = firebase.addEstimate(estimate, request.data['uid'], station_list)
+            order.firebase_uid = estimate_uid
+            order.save()
+        except Exception as e:
+            response = {
+                'result': 'flase',
+                'data': '3',
+                'message': {
+                    'error' : f"{e}"
+                }
+            }
+            return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-        print("ESTIMTAS", new_ref[1].id)
         response = {
             'result': 'true',
-            'data': new_ref[1].id,
+            'data': estimate_uid,
             'message': ''
         }
         return Response(response, status=status.HTTP_200_OK)
+
+class EstimateReservationConfirmView(APIView):
+    def post(self, request):
+        user_uid = request.data.get('user_uid')
+        estimate_uid = request.data.get("estimate_uid")
+
+        try:
+            order = DispatchOrder.objects.get(id=estimate_uid)
+            order.contract_status = "예약확정"
+            order.save()
+            #TODO rpad 관리자한테 알림 보내기
+        except Exception as e:
+            response = {
+                'result': 'flase',
+                'data': '3',
+                'message': {
+                    'error' : f"{e}"
+                }
+            }
+            return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        firebase = RpaPFirebase()
+        edit_type = "isConfirmedReservation"
+        estimate_data = firebase.editEstimate(estimate_uid, user_uid, edit_type, True)
+
+        response = {
+            'result': 'true',
+            'data': estimate_data,
+            'message': ''
+        }
+        return Response(response, status=status.HTTP_200_OK)
+
+class EstimateContract(APIView):
+    def get(self, request):
+        estimate_uid = request.data.get("estimate_uid")
+
+        try:
+            order = DispatchOrder.objects.get(firebase_uid=estimate_uid)
+            context = model_to_dict(order)
+            context['contract_date'] = datetime.strftime(order.pub_date, "%Y년 %m월 %d일")
+            context['estimate_date'] = datetime.strftime(datetime.strptime(order.departure_date, "%Y-%m-%d"), "%Y년 %m월 %d일")
+            context['total_price'] = int(context['bus_price']) * int(context['bus_cnt'])
+            context['VAT'] = "VAT 포함" if context['VAT'] == "y" else "VAT 미포함"
+            return render(request, 'estimate_print.html', context)
+        except Exception as e:
+            response = {
+                'result': 'flase',
+                'data': '1',
+                'message': {
+                    'error' : f"{e}"
+                }
+            }
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+        
+
 
 # async def do_async():
 #     try:
