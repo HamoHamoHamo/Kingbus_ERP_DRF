@@ -11,24 +11,6 @@ def is_correct_storage_bucket(app, expected_bucket):
     except Exception as e:
         return False
 
-def init_sunghwatour_firebase():
-    # cred = credentials.Certificate(dir)
-    if not _apps:
-        initialize_app()
-    
-    try:
-        app = get_app()
-        if app:
-            delete_app(app)
-        app = initialize_app()
-    except Exception as e:
-        print("firebase init error", e)
-        app = initialize_app()
-        print("init firebase", app)
-
-    print("APP", app.project_id)
-    return
-
 def init_firebase(dir):
     cred = credentials.Certificate(dir)
     if not _apps:

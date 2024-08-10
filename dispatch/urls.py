@@ -19,6 +19,7 @@ urlpatterns = [
 
     # rpa-p
     path('estimate', views.EstimateView.as_view()),
-    # path('estimate/contract')
+    path('estimate/reservation/confirm', views.EstimateReservationConfirmView.as_view()),
+    path('estimate/contract', views.EstimateContract.as_view()),
 
 ]
