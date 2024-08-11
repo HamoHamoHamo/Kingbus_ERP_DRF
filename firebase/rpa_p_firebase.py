@@ -53,7 +53,7 @@ class RpaPFirebase():
         estimate_data[type] = value
 
         try:
-            estimate.set(estimate_data)
+            doc.set(estimate_data)
         except Exception as e:
             logger.error(f"Firebase add error : {e}")
             raise Exception(f"Firebase add error : {e}")

@@ -5,6 +5,8 @@ from pathlib import Path
 import sys
 import os
 
+from my_settings import VERSION
+
 # 상위 폴더를 sys.path에 추가
 # sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
