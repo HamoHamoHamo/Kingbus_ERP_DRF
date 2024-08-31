@@ -29,10 +29,11 @@ class RpaPFirebase():
             print("init firebase", app)
         return
 
-    def addEstimate(self, data, user_uid, station_list):
+    def add_estimate(self, data, user_uid, station_list):
         try:
             estimate_ref = self.ref.collection("User").document(user_uid).collection("Estimate")
             new_estimate = estimate_ref.add(data)
+            print(new_estimate[1].path)
     
             for address in station_list:
                 estimate_ref.document(new_estimate[1].id).collection("EstimateAddress").add(address)
@@ -41,11 +42,15 @@ class RpaPFirebase():
             logger.error(f"Firebase add error : {e}")
             raise Exception(f"Firebase add error : {e}")
 
-        return new_estimate[1].id
-    
+        return new_estimate[1].path, new_estimate[1].id
 
-    def editEstimate(self, uid, user_uid, type, value):
+
+    def get_doc_path(self, uid, user_uid):
         doc = self.ref.collection("User").document(user_uid).collection("Estimate").document(uid)
+        return doc.path
+
+    def edit_estimate(self, path, type, value):
+        doc = self.db.document(path)
         estimate = doc.get()
         if not estimate:
             raise Exception("Firebase get error : No matched data")
@@ -59,3 +64,18 @@ class RpaPFirebase():
             raise Exception(f"Firebase add error : {e}")
 
         return estimate_data
+
+    def get_value(self, uid, field):
+        doc = self.db.document(uid)
+        print("TEST", doc)
+        estimate = doc.get()
+        if not estimate:
+            raise Exception("Firebase get error : No matched data")
+        try:
+            estimate_data = estimate.to_dict()
+            return estimate_data[field]
+
+        except Exception as e:
+            logger.error(f"Firebase add error : {e}")
+            raise Exception(f"Firebase add error : {e}")
+        

@@ -23,7 +23,7 @@ from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnec
     TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer
 from my_settings import SUNGHWATOUR_CRED_PATH, CRED_PATH
 
-
+from firebase.fcm_message import send_message
 from firebase_admin import firestore
 from firebase.rpa_p_firebase import RpaPFirebase
 
@@ -845,8 +845,8 @@ class EstimateView(APIView):
             )
 
         station_list = request.data['stopover'] if request.data['stopover'] else []
-        station_list.append(request.data['departure'])
-        station_list.append(request.data['arrival'])
+        # station_list.append(request.data['departure'])
+        # station_list.append(request.data['arrival'])
         station_list = sorted(station_list, key=lambda x: x['index'])
 
         for station_data in station_list:
@@ -902,8 +902,9 @@ class EstimateView(APIView):
         }
         firebase = RpaPFirebase()
         try:
-            estimate_uid = firebase.addEstimate(estimate, request.data['uid'], station_list)
+            estimate_path, estimate_uid = firebase.add_estimate(estimate, request.data['uid'], station_list)
             order.firebase_uid = estimate_uid
+            order.firebase_path = estimate_path
             order.save()
         except Exception as e:
             response = {
@@ -920,7 +921,34 @@ class EstimateView(APIView):
             'data': estimate_uid,
             'message': ''
         }
+
+        send_admin_notification(order, "TRP에서 배차 확정을 해주세요")
+
+
         return Response(response, status=status.HTTP_200_OK)
+
+def send_admin_notification(order, title):
+    target_list = []
+    try:
+        target_list.append(Member.objects.get(use="사용", authority__lte=1, name="김인숙"))
+        target_list.append(Member.objects.get(use="사용", authority__lte=1, name="이세명"))
+        target_list.append(Member.objects.get(use="사용", authority__lte=1, name="박유진"))
+        target_list.append(Member.objects.get(use="사용", authority__lte=1, name="엄성환"))
+
+    except Exception as e:
+        response = {
+            'result': 'false',
+            'data': '4',
+            'message': {
+                'error' : f"{e}"
+            }
+        }
+        return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    for target in target_list:
+        if target.token:
+            print(target.name)
+            send_message(title, f"{order.route}\n{order.departure_date} ~ {order.arrival_date}", target.token, None)
+
 
 class EstimateReservationConfirmView(APIView):
     def post(self, request):
@@ -944,13 +972,16 @@ class EstimateReservationConfirmView(APIView):
 
         firebase = RpaPFirebase()
         edit_type = "isConfirmedReservation"
-        estimate_data = firebase.editEstimate(estimate_uid, user_uid, edit_type, True)
+        path = firebase.get_doc_path(estimate_uid, user_uid)
+        estimate_data = firebase.edit_estimate(path, edit_type, True)
 
         response = {
             'result': 'true',
             'data': estimate_data,
             'message': ''
         }
+
+        send_admin_notification(order, "계약금 입금 확인 후 TRP에서 계약현황 확정을 해주세요")
         return Response(response, status=status.HTTP_200_OK)
 
 class EstimateContract(APIView):
@@ -960,6 +991,8 @@ class EstimateContract(APIView):
         try:
             order = DispatchOrder.objects.get(firebase_uid=estimate_uid)
             context = model_to_dict(order)
+            context['customer'] = order.customer
+            context['customer_phone'] = order.customer_phone
             context['contract_date'] = datetime.strftime(order.pub_date, "%Y년 %m월 %d일")
             context['estimate_date'] = datetime.strftime(datetime.strptime(order.departure_date[:10], "%Y-%m-%d"), "%Y년 %m월 %d일")
             context['total_price'] = int(context['price']) * int(context['bus_cnt'])
