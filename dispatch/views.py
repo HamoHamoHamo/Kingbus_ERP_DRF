@@ -12,15 +12,16 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from common.response import set_response_false, set_response_true
 from trp_drf.settings import DATE_FORMAT, TODAY, BASE_DIR
 from firebase.firebase_file import upload_files
 from trp_drf.pagination import Pagination
 from humanresource.models import Member
-from dispatch.models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrder, DispatchOrderStation
+from dispatch.models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrder, DispatchOrderStation, DispatchOrderTour, DispatchOrderTourCustomer
 from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, \
     DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, DrivingHistorySerializer, \
     DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer, MorningChecklistSerializer, EveningChecklistSerializer, \
-    TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer
+    TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer, DispatchOrderTourCustomerSerializer
 from my_settings import SUNGHWATOUR_CRED_PATH, CRED_PATH
 
 from firebase.fcm_message import send_message
@@ -1008,8 +1009,33 @@ class EstimateContract(APIView):
             }
             return Response(response, status=status.HTTP_400_BAD_REQUEST)
 
+class TourView(APIView):
+    def post(self, request):
+        tour_uid = request.data.get("tour_uid")
+        data = request.data.copy()
+        
 
+        try:
+            tour = DispatchOrderTour.objects.get(firebase_uid=tour_uid)
+            data['tour_id'] = tour.id
+            data['creator'] = request.user.id
+            if tour.max_people <= tour.tour_customer.count():
+                response = set_response_false('1', {'error': "최대 인원수를 초과했습니다"})
+                return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # tour가 없을 경우
+        except Exception as e:
+            response = set_response_false('2', {'error': f"{e}"})
+            return Response(response, status=status.HTTP_404_NOT_FOUND)
 
+        tour_customer = DispatchOrderTourCustomerSerializer(data=data)
+        if tour_customer.is_valid():
+            tour_customer.save()
+
+            response = set_response_true(tour_customer.data)
+            return Response(response, status=status.HTTP_200_OK)
+        response = set_response_false('3', {'error': f"{tour_customer.errors}"})
+        return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         
 
