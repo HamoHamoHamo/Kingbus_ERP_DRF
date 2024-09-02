@@ -5,12 +5,13 @@ from firebase_admin import credentials, initialize_app, storage, _apps, get_app,
 # sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from config.custom_logging import logger
+from my_settings import FIREBASE_SERVER_DOCUMENT
 
 class RpaPFirebase():
     
     def __init__(self):
         self.db = firestore.Client()
-        self.ref = self.db.collection("Server").document("Dev")
+        self.ref = self.db.collection("Server").document(FIREBASE_SERVER_DOCUMENT)
         self.init_sunghwatour_firebase()
 
     def init_sunghwatour_firebase(self):
