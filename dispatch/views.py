@@ -974,7 +974,7 @@ class EstimateReservationConfirmView(APIView):
         firebase = RpaPFirebase()
         edit_type = "isConfirmedReservation"
         path = firebase.get_doc_path(estimate_uid, user_uid)
-        estimate_data = firebase.edit_estimate(path, edit_type, True)
+        estimate_data = firebase.edit_value(path, edit_type, True)
 
         response = {
             'result': 'true',
