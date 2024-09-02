@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404
 from .models import DispatchOrderStation, DispatchOrder, DispatchRegularly, \
     DispatchRegularlyConnect, DispatchOrderConnect, DriverCheck, ConnectRefusal, \
     DispatchRegularlyWaypoint, DispatchRegularlyRouteKnow, DispatchRegularlyData, \
-    RegularlyGroup, MorningChecklist, EveningChecklist, DrivingHistory
+    RegularlyGroup, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrderTourCustomer
 from crudmember.models import Category
 from humanresource.models import Member
 
@@ -400,4 +400,9 @@ class DispatchOrderEstimateSerializer(serializers.ModelSerializer):
 class DispatchOrderStationEstimateSerializer(serializers.ModelSerializer):
     class Meta:
         model = DispatchOrderStation
+        fields = '__all__'
+
+class DispatchOrderTourCustomerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DispatchOrderTourCustomer
         fields = '__all__'
