@@ -964,7 +964,7 @@ class EstimateReservationConfirmView(APIView):
         except Exception as e:
             response = {
                 'result': 'false',
-                'data': '3',
+                'data': '1',
                 'message': {
                     'error' : f"{e}"
                 }
@@ -1037,6 +1037,17 @@ class TourView(APIView):
         response = set_response_false('3', {'error': f"{tour_customer.errors}"})
         return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    def get(self, request):
+        phone = request.GET.get("phone")
+
+        try:
+            customer_list = DispatchOrderTourCustomer.objects.filter(phone=phone)
+            response = set_response_true(DispatchOrderTourCustomerSerializer(customer_list, many=True).data)
+            
+            return Response(response, status=status.HTTP_200_OK)
+        except Exception as e:
+            response = set_response_false('1', {'error': f"{e}"})
+            return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
 
