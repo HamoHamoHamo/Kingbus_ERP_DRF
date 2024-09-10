@@ -996,8 +996,24 @@ class EstimateContract(APIView):
             context['customer_phone'] = order.customer_phone
             context['contract_date'] = datetime.strftime(order.pub_date, "%Y년 %m월 %d일")
             context['estimate_date'] = datetime.strftime(datetime.strptime(order.departure_date[:10], "%Y-%m-%d"), "%Y년 %m월 %d일")
-            context['total_price'] = int(context['price']) * int(context['bus_cnt'])
+            context['total_price'] = f"{(int(context['price']) * int(context['bus_cnt'])):,}"
             context['VAT'] = "VAT 포함" if context['VAT'] == "y" else "VAT 미포함"
+            context['order'] = order
+            context['price'] = f"{int(order.price):,}"
+            # context['price_per_person'] = context['price'] / 
+            context['vehicle_list'] = []
+            for connect in order.info_order.all():
+                context['vehicle_list'].append(f"{connect.bus_id.vehicle_num0} {connect.bus_id.vehicle_num}")
+                
+            context['station_list'] = []
+            for station in order.station.all():
+                context['station_list'].append(f"{station.station_name}")
+            
+            context['deposit'] = int(int(order.price) / 10)
+
+
+            # firebase = RpaPFirebase()
+            # number = firebase.get_value(order.firebase_path, "number")
             return render(request, 'estimate_print.html', context)
         except Exception as e:
             response = {
