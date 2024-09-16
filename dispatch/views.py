@@ -986,35 +986,44 @@ class EstimateReservationConfirmView(APIView):
         return Response(response, status=status.HTTP_200_OK)
 
 class EstimateContract(APIView):
-    def get(self, request):
+    template_name = 'estimate_print.html'
+
+    def set_order(self, request):
         estimate_uid = request.GET.get("estimateUid")
+        order = DispatchOrder.objects.get(firebase_uid=estimate_uid)
+        return order
 
-        try:
-            order = DispatchOrder.objects.get(firebase_uid=estimate_uid)
-            context = model_to_dict(order)
-            context['customer'] = order.customer
-            context['customer_phone'] = order.customer_phone
-            context['contract_date'] = datetime.strftime(order.pub_date, "%Y년 %m월 %d일")
-            context['estimate_date'] = datetime.strftime(datetime.strptime(order.departure_date[:10], "%Y-%m-%d"), "%Y년 %m월 %d일")
-            context['total_price'] = f"{(int(context['price']) * int(context['bus_cnt'])):,}"
-            context['VAT'] = "VAT 포함" if context['VAT'] == "y" else "VAT 미포함"
-            context['order'] = order
-            context['price'] = f"{int(order.price):,}"
-            # context['price_per_person'] = context['price'] / 
-            context['vehicle_list'] = []
-            for connect in order.info_order.all():
-                context['vehicle_list'].append(f"{connect.bus_id.vehicle_num0} {connect.bus_id.vehicle_num}")
-                
-            context['station_list'] = []
-            for station in order.station.all():
-                context['station_list'].append(f"{station.station_name}")
+    def set_context(self, request, order):
+        context = model_to_dict(order)
+        context['customer'] = order.customer
+        context['customer_phone'] = order.customer_phone
+        context['contract_date'] = datetime.strftime(order.pub_date, "%Y년 %m월 %d일")
+        context['estimate_date'] = datetime.strftime(datetime.strptime(order.departure_date[:10], "%Y-%m-%d"), "%Y년 %m월 %d일")
+        context['total_price'] = f"{(int(context['price']) * int(context['bus_cnt'])):,}"
+        context['VAT'] = "VAT 포함" if context['VAT'] == "y" else "VAT 미포함"
+        context['order'] = order
+        context['price'] = f"{int(order.price):,}"
+        # context['price_per_person'] = context['price'] / 
+        context['vehicle_list'] = []
+        for connect in order.info_order.all():
+            context['vehicle_list'].append(f"{connect.bus_id.vehicle_num0} {connect.bus_id.vehicle_num}")
             
-            context['deposit'] = int(int(order.price) / 10)
+        context['station_list'] = []
+        for station in order.station.all():
+            context['station_list'].append(f"{station.station_name}")
+        
+        context['deposit'] = int(int(order.price) / 10)
+        
+        return context
 
-
+    def get(self, request):
+        try:
+            order = self.set_order(request)
+            context = self.set_context(request, order)
+            
             # firebase = RpaPFirebase()
             # number = firebase.get_value(order.firebase_path, "number")
-            return render(request, 'estimate_print.html', context)
+            return render(request, self.template_name, context)
         except Exception as e:
             response = {
                 'result': 'false',
@@ -1024,6 +1033,33 @@ class EstimateContract(APIView):
                 }
             }
             return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+class TourContract(EstimateContract):
+    template_name = 'tour_print.html'
+    def set_order(self, request):
+        tour_uid = request.GET.get("tourUid")
+        tour = DispatchOrderTour.objects.get(firebase_uid=tour_uid)
+        
+        return tour.order_id
+    
+    def set_context(self, request, order):
+        context = super().set_context(request, order)
+
+        tour_uid = request.GET.get("tourUid")
+        phone = request.GET.get("phone")
+        tour = DispatchOrderTour.objects.get(firebase_uid=tour_uid)
+
+        customer = DispatchOrderTourCustomer.objects.filter(tour_id=tour).filter(phone=phone).first()
+        context['customer'] = customer.name
+        context['customer_phone'] = customer.phone
+        context['price_per_person'] = f"{int(tour.price):,}"
+        context['bank'] = customer.bank
+        return context
+    def set_customer(self, request, order, context):
+        
+        return context
+
+
 
 class TourView(APIView):
     def post(self, request):

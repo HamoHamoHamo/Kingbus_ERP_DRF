@@ -403,6 +403,8 @@ class DispatchOrderStationEstimateSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class DispatchOrderTourCustomerSerializer(serializers.ModelSerializer):
+    tour_uid = serializers.CharField(source='tour_id.firebase_uid', read_only=True)
+
     class Meta:
         model = DispatchOrderTourCustomer
         fields = '__all__'
