@@ -21,6 +21,7 @@ urlpatterns = [
     path('estimate', views.EstimateView.as_view()),
     path('estimate/reservation/confirm', views.EstimateReservationConfirmView.as_view()),
     path('estimate/contract', views.EstimateContract.as_view()),
+    path('tour/contract', views.TourContract.as_view()),
     path('tour', views.TourView.as_view()),
 
 ]
