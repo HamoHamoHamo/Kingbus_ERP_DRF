@@ -1,4 +1,4 @@
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
 from django.http import Http404, JsonResponse
 from rest_framework import status
 from rest_framework.generics import ListAPIView
@@ -47,3 +47,15 @@ class CommentView(APIView):
         else:
             return Response({'success': False}, status=status.HTTP_403_FORBIDDEN)
 
+def approval_rule_print(request):
+    return render(request, "notice/approval_rule_print.html")
+def roll_call_rule_print(request):
+    return render(request, "notice/roll_call_rule_print.html")
+def driver_rule_print(request):
+    return render(request, "notice/driver_rule_print.html")
+def manager_rule_print(request):
+    return render(request, "notice/manager_rule_print.html")
+def field_manager_rule_print(request):
+    return render(request, "notice/field_manager_rule_print.html")
+def personnel_committee_rule_print(request):
+    return render(request, "notice/personnel_committee_rule_print.html")
