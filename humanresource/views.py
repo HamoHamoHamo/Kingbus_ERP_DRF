@@ -62,7 +62,8 @@ class UserLoginView(APIView):
                         'user_id': serializer.validated_data['user_id'],
                         #name 추가
                         'name': serializer.validated_data['name'],
-                        'role': serializer.validated_data['role']
+                        'role': serializer.validated_data['role'],
+                        'position': serializer.validated_data['position']
                     }
                 },
                 'message': '',

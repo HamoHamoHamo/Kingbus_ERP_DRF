@@ -49,7 +49,8 @@ class UserLoginSerializer(serializers.Serializer):
             'refresh': refresh_token,
             'user_id': user.user_id,
             'name': user.name,
-            'role' : user.role
+            'role' : user.role,
+            "position": user.position,
         }
         return validation
 
