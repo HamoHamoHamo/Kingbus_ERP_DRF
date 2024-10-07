@@ -1,5 +1,5 @@
 import os
-from config.settings import BASE_DIR
+from config.settings.base import BASE_DIR
 from firebase_admin import credentials, messaging, initialize_app, storage, _apps, get_app, delete_app
 from my_settings import CRED_PATH, CLOUD_MEDIA_PATH
 from config.custom_logging import logger
