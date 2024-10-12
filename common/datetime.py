@@ -1,9 +1,14 @@
+import calendar
 import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from common.constant import WEEK2, DATE_FORMAT, DATE_TIME_FORMAT
+from my_settings import OPEN_API_KEY
 from django.core.exceptions import BadRequest
-import calendar
+from config.custom_logging import logger
+from typing import Dict, Any
+
+from django.core.cache import cache
 
 def calculate_time_difference(start_time_str, end_time_str):
     # 입력된 시간 문자열을 datetime 객체로 변환
@@ -35,6 +40,18 @@ def calculate_date_difference(start_date_str, end_date_str):
 
     # timedelta 객체에서 일(day), 시간(hour), 분(minute)을 추출
     return date_difference.days
+
+def calculate_minute_difference(start_minute, end_minute):
+    try:
+        int(start_minute)
+        int(end_minute)
+        # 도착시간이 자정을 넘을 경우
+        if end_minute >= start_minute:
+            return end_minute - start_minute
+        else:
+            return 24 * 60 + end_minute - start_minute
+    except ValueError:
+        raise Exception("Invalid Format")
 
 def last_day_of_month(date_str):
     try:
@@ -167,6 +184,77 @@ def get_mondays_from_last_week_of_previous_month(month):
     
     return mondays
 
+def get_holiday_list(year_month):
+    try:
+        holiday_data = cache.get(f"holiday:{year_month}")
+        if holiday_data:
+            return holiday_data
+    except Exception as e:
+        logger.error(f"redis error {e}")
+
+    api_url = 'http://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo'
+
+    try:
+        year = year_month[:4]
+        month = year_month[5:7]
+        datetime.strptime(year, "%Y")
+        datetime.strptime(month, "%m")
+    except:
+        raise BadRequest("year, month 양식에 안 맞음")
+    
+    params = {
+        'serviceKey': OPEN_API_KEY,
+        'solYear': year,
+        'solMonth': month,
+    }
+    
+    response = requests.get(api_url, params=params)
+    holiday_data = parse_xml_data(response.content)
+
+    # return [item['locdate'] for item in parse_xml_data(response.content)]
+    filtered_list = [item for item in holiday_data['date_name_list'] if '대체' not in item]
+
+    holiday_data['count'] = len(filtered_list)
+    
+    try:
+        cache.set(f"holiday:{year_month}", holiday_data)
+    except Exception as e:
+        logger.error(f"redis error {e}")
+
+
+    return holiday_data
+
+def parse_xml_data(xml_data):
+    # XML 데이터를 문자열로 변환
+    xml_data_str = xml_data.decode('utf-8')
+    
+    # XML 데이터 파싱
+    root = ET.fromstring(xml_data_str)
+
+    # items 요소 찾기
+    items = root.find('.//items')
+    
+    # item 요소 파싱
+    item_list = []
+    locdate_list = []
+    date_name_list = []
+    for item in items.findall('item'):
+        item_data = {
+            'dateKind': item.find('dateKind').text,
+            'dateName': item.find('dateName').text,
+            'isHoliday': item.find('isHoliday').text,
+            'locdate': item.find('locdate').text,
+            'seq': item.find('seq').text
+        }
+        if len(locdate_list) == 0 or locdate_list[len(locdate_list) - 1] != item_data['locdate']:
+            locdate_list.append(item_data['locdate'])
+            date_name_list.append(item_data['dateName'])
+        # item_list.append(item_data)
+    
+    return {
+        'date_name_list': date_name_list, 
+        'locdate_list': locdate_list,
+    }
 
 def get_next_sunday_after_last_day(month_str):
     """
@@ -217,3 +305,32 @@ def calculate_time_with_minutes(time_str, minutes):
 
     # 결과 시간을 "HH:MM" 형식으로 반환
     return new_time_obj.strftime("%H:%M")
+
+# 출발 시간과 도착 시간이 특정 시간 범위에 해당할 경우 카운트를 1씩 증가시키는 함수
+def count_range_hits(start_time_str, end_time_str, result) -> Dict[str, Any]:
+    # 주어진 시간 문자열을 datetime 객체로 변환
+    start_time = datetime.strptime(start_time_str, DATE_TIME_FORMAT)
+    end_time = datetime.strptime(end_time_str, DATE_TIME_FORMAT)
+    
+    # 범위 설정: 04:00 ~ 10:00, 17:00 ~ 21:00
+    RANGES = [
+        (timedelta(hours=4), timedelta(hours=10)),
+        (timedelta(hours=17), timedelta(hours=21)),
+    ]
+    
+    # 현재 시간을 출발 시간으로 초기화
+    current_time = start_time
+    while current_time <= end_time.replace(hour=23, minute=59):
+        # 현재 날짜의 04:00과 10:00, 17:00과 21:00 범위를 확인
+        for start_range, end_range in RANGES:
+            range_start_time = current_time.replace(hour=start_range.seconds // 3600, minute=0)
+            range_end_time = current_time.replace(hour=end_range.seconds // 3600, minute=0)
+            
+            # 현재 범위가 주어진 출발~도착 시간 내에 있으면 카운트를 증가
+            if start_time <= range_end_time and end_time >= range_start_time:
+                result[datetime.strftime(range_start_time, DATE_TIME_FORMAT)] = 1
+
+        # 현재 시간을 하루씩 증가시킴
+        current_time += timedelta(days=1)
+    
+    return result

@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from common.constant import TODAY, WEEK, FORMAT
 from django.apps import apps
+from salary.selectors import SalarySelector
+from salary.models import HourlyWage
 
 class Team(models.Model):
     name =models.CharField(verbose_name='팀이름', max_length=100, null=False, blank=False)
@@ -108,6 +110,15 @@ class MemberFile(models.Model):
 
 
 class Salary(models.Model):
+    def set_new_annual_allowance(month, member):
+        salary_selector = SalarySelector()
+        hourly_wage = salary_selector.get_hourly_wage_by_month(month)
+        if hourly_wage == None:
+            hourly_wage = HourlyWage.new_wage(month)
+
+        ordinary_hourly_wage = int(int(hourly_wage.wage1) + int(member.service_allowance) * 12 / 1470)
+        return ordinary_hourly_wage * 6
+
     def new_salary(creator, month, member):
         last_date = datetime.strftime(datetime.strptime(month+'-01', FORMAT) + relativedelta(months=1) - timedelta(days=1), FORMAT)
         # attendance = DispatchRegularlyConnect.objects.filter(work_type='출근').filter(driver_id=member).filter(departure_date__range=(month+'-01 00:00', last_date+' 24:00')).aggregate(Sum('driver_allowance'))
@@ -126,8 +137,19 @@ class Salary(models.Model):
         annual_allowance = 0
         overtime_allowance = 0
         meal = 0
+
+        new_annual_allowance = Salary.set_new_annual_allowance(month, member)
+        team_leader_allowance_roll_call = 100000 if member.role == "팀장" else 0
+        team_leader_allowance_vehicle_management = 100000 if member.role == "팀장" else 0
+        team_leader_allowance_task_management = 100000 if member.role == "팀장" else 0
+        full_attendance_allowance = 200000 if member.role == "팀장" or member.role == "운전원" else 0
+        diligence_allowance = 200000 if member.role == "팀장" or member.role == "운전원" else 0
+        accident_free_allowance = 200000 if member.role == "팀장" or member.role == "운전원" else 0
+        welfare_meal_allowance = 0 if member.role == "팀장" or member.role == "운전원" else 0
+        welfare_fuel_allowance = 0 if member.role == "팀장" or member.role == "운전원" else 0
         
 
+        # 이번달 이후의 급여면 현재 member에 있는 값으로 급여 생성
         if TODAY[:7] <= month:
             base = int(member.base)
             service_allowance = int(member.service_allowance)
@@ -135,6 +157,17 @@ class Salary(models.Model):
             annual_allowance = int(member.annual_allowance)
             overtime_allowance = int(member.overtime_allowance)
             meal = int(member.meal)
+
+        #    new_annual_allowance = int(member.new_annual_allowance)
+        #    team_leader_allowance_roll_call = int(member.team_leader_allowance_roll_call)
+        #    team_leader_allowance_vehicle_management = int(member.team_leader_allowance_vehicle_management)
+        #    team_leader_allowance_task_management = int(member.team_leader_allowance_task_management)
+        #    full_attendance_allowance = int(member.full_attendance_allowance)
+        #    diligence_allowance = int(member.diligence_allowance)
+        #    accident_free_allowance = int(member.accident_free_allowance)
+        #    welfare_meal_allowance = int(member.welfare_meal_allowance)
+        #    welfare_fuel_allowance = int(member.welfare_fuel_allowance)
+            
 
         # if salary:
         #     base = salary.base
@@ -150,7 +183,7 @@ class Salary(models.Model):
         #     order_price = int(order['driver_allowance__sum'])
         
         try:
-            Category = apps.get_model('Category', 'Model')
+            Category = apps.get_model('crudmember', 'Category')
             payment_date = Category.objects.get(type='급여지급일').category
         except:
             payment_date = 1
@@ -164,6 +197,16 @@ class Salary(models.Model):
             annual_allowance = annual_allowance,
             overtime_allowance = overtime_allowance,
             meal = meal,
+
+            new_annual_allowance = new_annual_allowance,
+            team_leader_allowance_roll_call = team_leader_allowance_roll_call,
+            team_leader_allowance_vehicle_management = team_leader_allowance_vehicle_management,
+            team_leader_allowance_task_management = team_leader_allowance_task_management,
+            full_attendance_allowance = full_attendance_allowance,
+            diligence_allowance = diligence_allowance,
+            accident_free_allowance = accident_free_allowance,
+            welfare_meal_allowance = welfare_meal_allowance,
+            welfare_fuel_allowance = welfare_fuel_allowance,
             # attendance = attendance_price,
             # leave = leave_price,
             # order = order_price,
@@ -193,6 +236,8 @@ class Salary(models.Model):
             return int(self.overtime_allowance) + int(self.performance_allowance) + int(self.attendance) + int(self.leave) + int(self.order) + int(self.assignment) + int(self.regularly_assignment) + int(self.additional) - int(self.deduction)
         else:
             return "error"
+    def calculate_new_total(self, wage):
+        return int(wage) + int(self.service_allowance) + int(self.annual_allowance) + int(self.team_leader_allowance_roll_call) + int(self.team_leader_allowance_vehicle_management) + int(self.team_leader_allowance_task_management) + int(self.full_attendance_allowance) + int(self.diligence_allowance) + int(self.accident_free_allowance) + int(self.welfare_meal_allowance) + int(self.welfare_fuel_allowance) + int(self.additional) - int(self.deduction)
 
     def calculate_fixed(self):
         member = self.member_id
@@ -217,8 +262,26 @@ class Salary(models.Model):
     order = models.CharField(verbose_name='일반주문요금', max_length=20, null=False)
     additional = models.CharField(verbose_name='추가요금', max_length=20, null=False, default=0)
     deduction = models.CharField(verbose_name='공제', max_length=20, null=False, default=0)
+    weekly_holiday_allowance_deduction = models.CharField(verbose_name='주휴수당 차감', max_length=20, null=False, default=0)
     assignment = models.CharField(verbose_name='일반업무', max_length=20, null=False, default=0)
     regularly_assignment = models.CharField(verbose_name='고정업무', max_length=20, null=False, default=0)
+    
+    new_annual_allowance = models.CharField(verbose_name="연차수당2", max_length=100, null=False, default=0)
+    team_leader_allowance_roll_call = models.CharField(verbose_name="팀장수당(점호관리)", max_length=100, null=False, default=0)
+    team_leader_allowance_vehicle_management = models.CharField(verbose_name="팀장수당(차량관리)", max_length=100, null=False, default=0)
+    team_leader_allowance_task_management = models.CharField(verbose_name="팀장수당(업무관리)", max_length=100, null=False, default=0)
+    full_attendance_allowance = models.CharField(verbose_name="만근수당", max_length=100, null=False, default=0)
+    diligence_allowance = models.CharField(verbose_name="성실수당", max_length=100, null=False, default=0)
+    accident_free_allowance = models.CharField(verbose_name="무사고수당", max_length=100, null=False, default=0)
+    welfare_meal_allowance = models.CharField(verbose_name="복리후생 (식대)", max_length=100, null=False, default=0)
+    welfare_fuel_allowance = models.CharField(verbose_name="복리후생(유류비)", max_length=100, null=False, default=0)
+
+    #FIXME 임금총합계 저장 안하고 salary service에서 불러와서 계산하기, 추후 수정
+    #new_total = models.CharField(verbose_name='임금총합계', max_length=20, null=False, default=0)
+
+    #임금	근속수당	연차수당	팀장수당(점호관리)	팀장수당(차량관리)	팀장수당(업무관리)	만근수당	성실수당	무사고수당	복리후생 (식대)	복리후생(유류비)
+    #기본급	근속수당	연차수당	성과급	식대	출근수당	퇴근수당	일반수당	업무수당
+    
     total = models.CharField(verbose_name='총금액', max_length=20, null=False)
     month = models.CharField(verbose_name='지급월', null=False, max_length=7)
     payment_date = models.CharField(verbose_name='급여지급일', null=False, max_length=10, blank=True)
@@ -256,6 +319,18 @@ class DeductionSalary(models.Model):
         if self.member_id:
             return self.member_id.name + ' ' + self.salary_id.month
 
+class WeeklyHolidayAllowanceDeductionSalary(models.Model):
+    salary_id = models.ForeignKey(Salary, on_delete=models.CASCADE, related_name="weekly_holiday_allowance_deduction_data", null=False)
+    member_id = models.ForeignKey(Member, on_delete=models.CASCADE, related_name="weekly_holiday_allowance_deduction_data", null=False)
+    price = models.CharField(verbose_name='금액', max_length=40, null=False, default='0')
+    remark = models.CharField(verbose_name='비고', null=False, blank=True, max_length=100)
+    creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="weekly_holiday_allowance_deduction_user", null=True)
+    pub_date = models.DateTimeField(verbose_name='작성시간', auto_now_add=True, null=False)
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
+     
+    def __str__(self):
+        if self.member_id:
+            return self.member_id.name + ' ' + self.salary_id.month
 
 class SalaryChecked(models.Model):
     salary = models.OneToOneField(Salary, on_delete=models.SET_NULL, related_name="salary_checked", null=True)
