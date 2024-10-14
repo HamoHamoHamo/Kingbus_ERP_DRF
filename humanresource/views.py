@@ -20,7 +20,7 @@ from trp_drf.settings import BASE_DIR
 from my_settings import CLOUD_MEDIA_PATH, MAINTENANCE
 from trp_drf.pagination import Pagination
 from trp_drf.settings import DATE_FORMAT
-from django.http import Http404, HttpResponse, HttpResponseNotAllowed
+from django.http import Http404, HttpResponse, HttpResponseNotAllowed, JsonResponse
 from PIL import Image
 from firebase.media_firebase import upload_to_firebase
 
@@ -362,6 +362,12 @@ def salary_detail(request):
 
 def salary_detail_hourly(request):
     user = request.user
+    if user.role == '팀장':
+        return JsonResponse({
+                'result' : 'true',
+                'data' : '1',
+                'message' : '팀장',
+            })
     member_id_list = [user.id]
     
     context = {}
