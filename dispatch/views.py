@@ -28,6 +28,8 @@ from firebase.fcm_message import send_message
 from firebase_admin import firestore
 from firebase.rpa_p_firebase import RpaPFirebase
 
+from .twilio import generate_verification_code, send_verification_code
+from django.core.cache import cache  # Django 캐시 사용
 
 def get_invalid_date_format_response():
     response = {
@@ -830,6 +832,13 @@ class EstimateView(APIView):
             "creator" : request.user.id
         }
 
+        #     # 전화번호 인증이 완료되었는지 확인
+        # if not cache.get(f"verified_{request.data['phone']}"):
+        #     return Response({
+        #         'result': 'false',
+        #         'message': '전화번호 인증이 완료되지 않았습니다.'
+        #     }, status=status.HTTP_400_BAD_REQUEST)
+
         
         serializer = DispatchOrderEstimateSerializer(data=data)
         if serializer.is_valid():
@@ -1100,8 +1109,86 @@ class TourView(APIView):
         except Exception as e:
             response = set_response_false('1', {'error': f"{e}"})
             return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# 전화번호 인증 코드 전송
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def send_code(request) :
+    customer_phone = request.data.get('customer_phone')
+
+    if not customer_phone :
+        response = {
+            'result' : 'false',
+            'data': '1',
+            'message' : '전화번호를 입력해주세요'
+        }
+        return Response(response, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        # 인증 코드 생성 및 전송
+        verification_code = generate_verification_code()
+        send_verification_code(customer_phone, verification_code)
+
+        # 인증 코드를 캐시에 저장 (5분 동안 유지)
+        cache.set(customer_phone, verification_code, timeout=300) 
         
 
+        response = {
+            'result': 'true',
+            'data': '0',
+            'message': '인증 코드가 성공적으로 전송되었습니다.'
+        }
+        return Response(response, status=status.HTTP_200_OK)
+    
+    except Exception as e:
+        response = {
+            'result': 'false',
+            'data': '2',
+            'message': str(e)           
+        }
+        return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)   
+        
+
+# 전화번호 인증 코드 검증 
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_code(request):
+    customer_phone = request.data.get('customer_phone')
+    verification_code = request.data.get('verification_code')
+
+    if not customer_phone or not verification_code:
+        
+        return Response({
+            'result': 'false',
+            'data': '1',
+            'message': '전화번호와 인증 코드를 모두 입력해주세요.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # 캐시에서 저장된 인증 코드 가져오기
+    stored_code = cache.get(customer_phone)
+
+    if stored_code is None:
+        
+        return Response({
+            'result': 'false',
+            'data': '2',
+            'message': '인증 코드가 만료되었거나 잘못된 전화번호입니다.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if verification_code == stored_code:
+        cache.set(f"verified_{customer_phone}", True, timeout=3600)  # 인증 완료 상태 캐시에 저장
+        # 인증 성공 처리
+        return Response({
+            'result': 'true',
+            'data': '0',
+            'message': '인증이 성공적으로 완료되었습니다.'
+        }, status=status.HTTP_200_OK)
+    else:
+        return Response({
+            'result': 'false',
+            'data': '3',
+            'message': '잘못된 인증 코드입니다.'
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 # async def do_async():
 #     try:
