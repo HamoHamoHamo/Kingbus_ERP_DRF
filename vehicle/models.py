@@ -5,6 +5,7 @@ from datetime import datetime
 from uuid import uuid4
 
 class Vehicle(models.Model):
+    # 차량정보
     vehicle_num0 = models.CharField(verbose_name='차량번호 앞자리', max_length=100, null=False)
     vehicle_num = models.CharField(verbose_name='차량번호', max_length=100, null=False)
     vehicle_id = models.CharField(verbose_name='차대번호', max_length=100, null=False, blank=True)
@@ -14,12 +15,37 @@ class Vehicle(models.Model):
     maker = models.CharField(verbose_name='제조사', max_length=100, null=False, blank=True)
     model_year = models.CharField(verbose_name='연식', max_length=100, null=False, blank=True)
     release_date = models.CharField(verbose_name='출고일자', max_length=100, null=False, blank=True)
-    driver = models.OneToOneField(Member, verbose_name='기사', on_delete=models.SET_NULL, null=True, related_name="vehicle", db_column="vehicle")
-    driver_name = models.CharField(verbose_name='기사이름', max_length=100, null=False, blank=True)
+    driver = models.ForeignKey(Member, verbose_name='기사', on_delete=models.SET_NULL, null=True, related_name="vehicle", db_column="vehicle", blank=True)
     use = models.CharField(verbose_name='사용여부', max_length=100, null=False, default='사용', blank=True)
     passenger_num = models.CharField(verbose_name='승차인원', max_length=100, null=False, blank=True)
     check_date = models.CharField(verbose_name='정기점검일', max_length=100, null=False, blank=True)
     type = models.CharField(verbose_name='형식', max_length=100, null=False, blank=True)
+    garage = models.ForeignKey("dispatch.Station", on_delete=models.SET_NULL, related_name="garage", verbose_name='차고지', null=True, blank=True)
+    remark = models.CharField(verbose_name='비고', max_length=100, null=False, blank=True)
+
+    #차량가격
+    vehicle_price = models.IntegerField(verbose_name='차량가격', null=True, blank=True)  # 차량가격
+    depreciation_month = models.IntegerField(verbose_name='감가상각(월)', null=True, blank=True)  # 감가상각(월)
+    number_price = models.IntegerField(verbose_name='번호판가격', null=True, blank=True)  # 번호판가격
+    depreciation_year = models.IntegerField(verbose_name='감가상각 기준 연도', null=True, blank=True)  # 감가상각 기준 연도
+    insurance_pay_date = models.CharField(verbose_name='보험납부일', max_length=100, null=True, blank=True)  # 보험납부일
+    insurance_price = models.IntegerField(verbose_name='보험비', null=True, blank=True)  # 보험비
+    monthly_installment = models.IntegerField(verbose_name='할부금액(월)', null=True, blank=True)  # 할부금액(월)
+    remaining_installment_amount = models.IntegerField(verbose_name='남은 할부액', null=True, blank=True)  # 남은 할부액
+
+    #차량옵션
+    led = models.BooleanField(verbose_name='전광판유무', default=False)
+    fridge = models.BooleanField(verbose_name='냉장고유무', default=False)
+    sing = models.BooleanField(verbose_name='노래방유무', default=False)
+    usb = models.BooleanField(verbose_name='USB 유무', default=False)
+    water_heater = models.BooleanField(verbose_name='온수기유무', default=False)
+    tv = models.BooleanField(verbose_name='tv유무', default=False)
+
+    # 총 정비 금액
+    total_maintenance_cost = models.IntegerField(verbose_name='총정비금액', default=0)
+    # 총 튜닝 금액
+    total_tuning_cost = models.IntegerField(verbose_name='총튜닝금액', default=0)
+
     creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="vehicle_user", db_column="user_id", null=True)
     pub_date = models.DateTimeField(verbose_name='작성시간', auto_now_add=True, null=False)
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
