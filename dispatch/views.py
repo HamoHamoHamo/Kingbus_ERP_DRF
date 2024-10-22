@@ -1118,7 +1118,8 @@ def send_code(request) :
 
     if not customer_phone :
         response = {
-            'result' : False,
+            'result' : 'false',
+            'data': '1',
             'message' : '전화번호를 입력해주세요'
         }
         return Response(response, status=status.HTTP_400_BAD_REQUEST)
@@ -1133,14 +1134,16 @@ def send_code(request) :
         
 
         response = {
-            'result': True,
+            'result': 'true',
+            'data': '0',
             'message': '인증 코드가 성공적으로 전송되었습니다.'
         }
         return Response(response, status=status.HTTP_200_OK)
     
     except Exception as e:
         response = {
-            'result': False,
+            'result': 'false',
+            'data': '2',
             'message': str(e)           
         }
         return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)   
@@ -1156,7 +1159,8 @@ def verify_code(request):
     if not customer_phone or not verification_code:
         
         return Response({
-            'result': False,
+            'result': 'false',
+            'data': '1',
             'message': '전화번호와 인증 코드를 모두 입력해주세요.'
         }, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1167,6 +1171,7 @@ def verify_code(request):
         
         return Response({
             'result': 'false',
+            'data': '2',
             'message': '인증 코드가 만료되었거나 잘못된 전화번호입니다.'
         }, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1174,12 +1179,14 @@ def verify_code(request):
         cache.set(f"verified_{customer_phone}", True, timeout=3600)  # 인증 완료 상태 캐시에 저장
         # 인증 성공 처리
         return Response({
-            'result': True,
+            'result': 'true',
+            'data': '0',
             'message': '인증이 성공적으로 완료되었습니다.'
         }, status=status.HTTP_200_OK)
     else:
         return Response({
-            'result': False,
+            'result': 'false',
+            'data': '3',
             'message': '잘못된 인증 코드입니다.'
         }, status=status.HTTP_400_BAD_REQUEST)
 
