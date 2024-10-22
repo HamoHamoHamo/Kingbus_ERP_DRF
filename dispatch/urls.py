@@ -23,5 +23,6 @@ urlpatterns = [
     path('estimate/contract', views.EstimateContract.as_view()),
     path('tour/contract', views.TourContract.as_view()),
     path('tour', views.TourView.as_view()),
-
+    path('send/code', views.send_code), # 전화번호 인증 코드 전송
+    path('verify/code', views.verify_code, name='verify_code'), # 전화번호 인증 코드 확인
 ]
