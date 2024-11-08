@@ -100,6 +100,16 @@ ASGI_APPLICATION = 'trp_drf.asgi.application'
 
 DATABASES = my_settings.DATABASES
 
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': 'redis://localhost:6379',  # Redis 데이터베이스 1번 사용
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        },
+        'TIMEOUT': 60 * 60 * 24 * 7,  # 기본 만료 시간 7일
+    }
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/4.0/ref/settings/#auth-password-validators
