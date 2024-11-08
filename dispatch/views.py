@@ -12,16 +12,17 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from common.response import set_response_false, set_response_true
+from common.response import set_response_false, set_response_true, StandardResponse
 from trp_drf.settings import DATE_FORMAT, TODAY, BASE_DIR
 from firebase.firebase_file import upload_files
 from trp_drf.pagination import Pagination
 from humanresource.models import Member
 from dispatch.models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrder, DispatchOrderStation, DispatchOrderTour, DispatchOrderTourCustomer
+from .services import DispatchRegularlyConnectService
 from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, \
     DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, DrivingHistorySerializer, \
     DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer, MorningChecklistSerializer, EveningChecklistSerializer, \
-    TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer, DispatchOrderTourCustomerSerializer
+    TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer, DispatchOrderTourCustomerSerializer, LocationHistoryRequestSerializer, LocationHistorySerializer
 from my_settings import SUNGHWATOUR_CRED_PATH, CRED_PATH
 
 from firebase.fcm_message import send_message
@@ -98,6 +99,55 @@ class DailyDispatches(APIView):
         }
         return Response(response, status=status.HTTP_200_OK)
 
+class LocationHistory(APIView):
+    permission_classes = (IsAuthenticated,)
+    def get(self, request):
+        request_serializer = LocationHistoryRequestSerializer(data=request.GET)
+        # id가 숫자가 아님
+        if not request_serializer.is_valid():
+            return StandardResponse.get_response(False, '1', request_serializer.errors, status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            connect_id = request_serializer.validated_data['id']
+            connect = DispatchRegularlyConnect.objects.get(id=connect_id)
+            response_serializer = LocationHistorySerializer(connect)
+            return StandardResponse.get_response(True, response_serializer.data, "", status.HTTP_200_OK)
+
+
+        # 올바르지 않은 id
+        except DispatchRegularlyConnect.DoesNotExist:
+            error_message = {'id': "Invalid Id"}
+            return StandardResponse.get_response(False, '2', error_message, status.HTTP_404_NOT_FOUND)
+    
+        except Exception as e:
+            return StandardResponse.get_response(False, '3', {'error': f"{e}"}, status.HTTP_400_BAD_REQUEST)
+            
+
+    def post(self, request):
+        try:
+            connect = DispatchRegularlyConnect.objects.get(
+                id=request.data.get('id')
+            )
+            
+            serializer = LocationHistorySerializer(
+                connect,
+                data=request.data,
+                partial=True  # 부분 업데이트 허용
+            )
+            
+            if serializer.is_valid():
+                serializer.save()
+                return StandardResponse.get_response(True, serializer.data, "", status.HTTP_200_OK)
+            
+            return StandardResponse.get_response(False, "1", {"error": f"{serializer.errors}"}, status.HTTP_400_BAD_REQUEST)
+        
+        # 올바르지 않은 id
+        except DispatchRegularlyConnect.DoesNotExist:
+            return StandardResponse.get_response(False, '2', {"id": "Invalid Id"}, status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return StandardResponse.get_response(False, '3', {'error': f"{e}"}, status.HTTP_400_BAD_REQUEST)
+            
 class DriverCheckView(APIView):
     def patch(self, request):
         regularly_id = request.data['regularly_id']

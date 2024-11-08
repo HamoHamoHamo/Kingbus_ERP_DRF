@@ -408,3 +408,12 @@ class DispatchOrderTourCustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = DispatchOrderTourCustomer
         fields = '__all__'
+
+class LocationHistoryRequestSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+
+class LocationHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DispatchRegularlyConnect
+        fields = ['id', 'locations']
+        read_only_fields = ['id']

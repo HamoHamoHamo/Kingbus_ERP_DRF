@@ -8,6 +8,29 @@ from django.core.exceptions import BadRequest
 
 from common.datetime import get_hour_minute
 
+STATUS_CHOICES = [
+        ('운행 전', '운행 전'),
+        ('운행 준비 확인', '운행 준비 확인'),
+        ('탑승 및 운행 시작', '탑승 및 운행 시작'),
+        ('운행 일보 작성', '운행 일보 작성'),
+        ('첫 정류장 도착', '첫 정류장 도착'),
+        ('운행 출발', '운행 출발'),
+        ('운행 중', '운행 중'),
+        ('운행 일보 작성', '운행 일보 작성'),
+        ('운행 종료', '운행 종료'),
+        ('운행 완료', '운행 완료'),
+    ]
+
+class RouteTeam(models.Model):
+    name = models.CharField(verbose_name='팀이름', max_length=100)
+    team_leader = models.ForeignKey(Member, on_delete=models.SET_NULL, limit_choices_to={'role': '팀장'}, related_name='route_teams_leader', null=True, blank=False)
+    pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
+    creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="route", db_column="creator_id", null=True)
+    
+    def __str__(self):
+        return f"{self.name}"
+
 class BusinessEntity(models.Model):
     name = models.CharField(verbose_name='사업장 이름', max_length=50, null=False, unique=True)
     number = models.IntegerField(verbose_name='순번', null=False, default=999)
@@ -37,6 +60,7 @@ class DispatchRegularlyData(models.Model):
         return get_hour_minute(int(self.time)) if self.time else ""
 
     group = models.ForeignKey(RegularlyGroup, verbose_name='그룹', related_name="regularly", on_delete=models.SET_NULL, null=True)
+    team = models.ForeignKey(RouteTeam, verbose_name='팀', related_name="regularly", on_delete=models.SET_NULL, null=True)
     station = models.ManyToManyField("Station", related_name="regularly_data", through="DispatchRegularlyDataStation")
     references = models.CharField(verbose_name='참조사항', max_length=100, null=False, blank=True)
     departure = models.CharField(verbose_name='출발지', max_length=200, null=False)
@@ -169,9 +193,9 @@ class DispatchOrder(models.Model):
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
     creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="dispatch_creator", db_column="creator_id", null=True)
 
-    firebase_uid = models.CharField(verbose_name="파이어베이스 uid", max_length=100, null=True)
+    firebase_uid = models.CharField(verbose_name="파이어베이스 견적 uid", max_length=100, null=True)
     firebase_path = models.CharField(verbose_name="파이어베이스 견적 path", max_length=100, null=True)
-    
+
     def __str__(self):
         return self.route
 
@@ -189,7 +213,7 @@ class DispatchOrderTour(models.Model):
 
 class DispatchOrderTourCustomer(models.Model):
     tour_id = models.ForeignKey(DispatchOrderTour, on_delete=models.CASCADE, related_name="tour_customer", null=False)
-    user_uid = models.CharField(verbose_name="파이어베이스 유저 uid", max_length=100, null=False)
+    user_uid = models.CharField(verbose_name="파이어베이스 유저 uid", max_length=100, null=False, blank=True)
     name = models.CharField(verbose_name="이름", max_length=100, null=False)
     phone = models.CharField(verbose_name="전화번호", max_length=100, null=False)
     bank = models.CharField(verbose_name="은행", max_length=100, null=False)
@@ -228,6 +252,7 @@ class DispatchOrderConnect(models.Model):
     price = models.CharField(verbose_name='계약금액', max_length=40, null=False)
     driver_allowance = models.CharField(verbose_name='기사수당', max_length=40, null=False)
     payment_method = models.CharField(verbose_name='상여금 선지급', max_length=1, null=False, default="n")
+    status = models.CharField(verbose_name='운행상태', max_length=100, null=False, default="운행 전", choices=STATUS_CHOICES)
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
     creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="connect_creator", db_column="creator_id", null=True)
@@ -246,12 +271,14 @@ class DispatchRegularlyConnect(models.Model):
     driver_allowance = models.CharField(verbose_name='기사수당', max_length=10, null=False)
     time = models.CharField(verbose_name='시간', max_length=100, null=False, blank=True)
     distance = models.CharField(verbose_name='거리', max_length=100, null=False, blank=True)
+    status = models.CharField(verbose_name='운행상태', max_length=100, null=False, default="운행 전", choices=STATUS_CHOICES)
+    locations = models.JSONField(verbose_name="운행 경로", null=True)
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
     creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="connect_regularly_creator", db_column="creator_id", null=True)
     def __str__(self):
         return f'{self.work_type} {self.regularly_id} / {self.departure_date[2:10]}'
-        
+
 class DispatchCheck(models.Model):
     date = models.CharField(verbose_name='날짜', max_length=20, null=False)
     # dispatch_check = models.CharField(verbose_name='확인완료', max_length=1, null=False, default='n')
@@ -441,5 +468,14 @@ class DispatchRegularlyStation(models.Model):
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
     creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="regularly_station_creator", db_column="creator_id", null=True)
-    def __str__(self):
-        return f'{self.regularly.route} {self.station.name} {self.index} {self.station_type} {self.time}'
+    # def __str__(self):
+    #     return f'{self.regularly.route} {self.station.name} {self.index} {self.station_type} {self.time}'
+
+# 정류장 도착 버튼 클릭으로 입력된 시간 (출퇴근만)
+class StationArrivalTime(models.Model):
+    regularly_connect = models.ForeignKey(DispatchRegularlyConnect, on_delete=models.CASCADE, related_name="station_arrival_time", null=False)
+    station = models.ForeignKey(DispatchRegularlyConnect, on_delete=models.CASCADE, related_name="connect_arrival_time", null=False)
+    arrival_time = models.CharField(verbose_name="정류장 도착 시각", max_length=100, null=False)
+    pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
+    creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="station_arrival_time_crator", db_column="creator_id", null=True)
