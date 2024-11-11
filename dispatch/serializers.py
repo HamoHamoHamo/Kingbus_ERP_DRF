@@ -51,6 +51,18 @@ class DispatchRegularlyConnectSerializer(serializers.ModelSerializer):
         model = DispatchRegularlyConnect
         fields = ['id', 'price', 'driver_allowance', 'work_type', 'route', 'location', 'check_regularly_connect', 'detailed_route', 'maplink', 'group', 'references', 'departure', 'arrival', 'week', 'route', 'departure_date', 'arrival_date', 'bus_id', 'price', 'driver_allowance', 'waypoint']
 
+# 일반배차리스트
+class DispatchRegularlyConnectListSerializer(serializers.ModelSerializer):
+    work_type = serializers.ReadOnlyField(source="regularly_id.work_type")
+    bus_id = serializers.ReadOnlyField(source="bus_id.vehicle_num")
+    arrival = serializers.ReadOnlyField(source="regularly_id.arrival")
+    maplink = serializers.ReadOnlyField(source="regularly_id.maplink")
+    departure = serializers.ReadOnlyField(source="regularly_id.departure")
+
+    class Meta:
+        model = DispatchRegularlyConnect
+        fields = ['id', 'work_type', 'bus_id', 'departure_date', 'arrival_date', 'departure', 'arrival', 'maplink']
+
 class DispatchOrderStationSerializer(serializers.ModelSerializer):
     waypoint = serializers.SerializerMethodField()
 
@@ -70,6 +82,22 @@ class DispatchOrderSerializer(serializers.ModelSerializer):
         model = DispatchOrder
         # fields = ['references', 'route']
         fields = ['waypoint']
+
+# 정기배차리스트
+class DispatchOrderConnectListSerializer(serializers.ModelSerializer):
+    arrival = serializers.ReadOnlyField(source="order_id.arrival")
+    bus_id = serializers.ReadOnlyField(source="bus_id.vehicle_num")
+    departure = serializers.ReadOnlyField(source="order_id.departure")
+    work_type = serializers.ReadOnlyField()
+    maplink = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DispatchOrderConnect
+        fields = ['id', 'work_type', 'bus_id', 'departure_date', 'arrival_date', 'departure', 'arrival', 'maplink']
+    
+    def get_maplink(self, obj):
+        # 일반 배차에는 maplink가 없으므로 빈 문자열을 반환
+        return ""
 
 class DispatchOrderConnectSerializer(serializers.ModelSerializer):
     waypoint = DispatchOrderStationSerializer(many=True, source="order_id.station")

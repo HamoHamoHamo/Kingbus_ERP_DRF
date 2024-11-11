@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     path('monthly/<str:month>', views.MonthlyDispatches.as_view()),
+    path('daily/list/<str:date>', views.DailyListDispatches.as_view()),
     path('daily/<str:date>', views.DailyDispatches.as_view()),
     path('check', views.DriverCheckView.as_view()),
     path('connect/check', views.ConnectCheckView.as_view()),

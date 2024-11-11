@@ -231,8 +231,9 @@ class DispatchOrderConnect(models.Model):
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
     creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="connect_creator", db_column="creator_id", null=True)
+
     def __str__(self):
-        return f'{self.order_id.route} / {self.departure_date[2:10]}'
+        return f'{self.work_type} {self.order_id.route} / {self.departure_date[2:10]}'
 
 class DispatchRegularlyConnect(models.Model):
     regularly_id = models.ForeignKey(DispatchRegularly, on_delete=models.CASCADE, related_name="info_regularly", db_column="order_id", null=False)
@@ -249,6 +250,7 @@ class DispatchRegularlyConnect(models.Model):
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
     creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="connect_regularly_creator", db_column="creator_id", null=True)
+
     def __str__(self):
         return f'{self.work_type} {self.regularly_id} / {self.departure_date[2:10]}'
         

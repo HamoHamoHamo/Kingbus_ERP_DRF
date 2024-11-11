@@ -21,8 +21,10 @@ from dispatch.models import DriverCheck, DispatchRegularlyData, RegularlyGroup, 
 from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, \
     DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, DrivingHistorySerializer, \
     DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer, MorningChecklistSerializer, EveningChecklistSerializer, \
-    TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer, DispatchOrderTourCustomerSerializer
+    TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer, DispatchOrderTourCustomerSerializer, DispatchRegularlyConnectListSerializer, DispatchOrderConnectListSerializer
 from my_settings import SUNGHWATOUR_CRED_PATH, CRED_PATH
+from itertools import chain
+from operator import itemgetter
 
 from firebase.fcm_message import send_message
 from firebase_admin import firestore
@@ -97,6 +99,43 @@ class DailyDispatches(APIView):
             'message' : '',
         }
         return Response(response, status=status.HTTP_200_OK)
+    
+# 일일 배차 리스트
+class DailyListDispatches(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request, date):
+        # 날짜 형식 검사
+        try:
+            datetime.strptime(date, "%Y-%m-%d")  # DATE_FORMAT이 "%Y-%m-%d" 형식이라고 가정
+        except ValueError:
+            return Response({
+                'result': 'false',
+                'data': '1',
+                'message': {'error': 'Invalid date format'}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 사용자 및 날짜 조건으로 정기 배차와 주문 배차 데이터 가져오기
+        user = request.user
+        regularly_dispatches = DispatchRegularlyConnect.objects.filter(departure_date__startswith=date, driver_id=user)
+        order_dispatches = DispatchOrderConnect.objects.filter(departure_date__startswith=date, driver_id=user)
+
+        # 데이터 직렬화
+        regularly_serialized = DispatchRegularlyConnectListSerializer(regularly_dispatches, many=True).data
+        order_serialized = DispatchOrderConnectListSerializer(order_dispatches, many=True).data
+
+        # 두 리스트를 하나로 합친 후 departure_date(또는 departure_time) 기준으로 정렬
+        combined_dispatches = list(chain(regularly_serialized, order_serialized))
+        combined_dispatches.sort(key=itemgetter('departure_date'))  # departure_date로 정렬
+
+        response_data = {
+            'result': 'true',
+            'data': combined_dispatches,
+            'message': ''
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
 
 class DriverCheckView(APIView):
     def patch(self, request):
@@ -498,7 +537,7 @@ class EveningChecklistView(APIView):
         response = {
             'result': 'false',
             'data': '2',
-            'message': {
+            'message': {    
                 'error': serializer.errors
             }
         }
