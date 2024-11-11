@@ -21,7 +21,7 @@ from dispatch.models import DriverCheck, DispatchRegularlyData, RegularlyGroup, 
 from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, \
     DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, DrivingHistorySerializer, \
     DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer, MorningChecklistSerializer, EveningChecklistSerializer, \
-    TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer, DispatchOrderTourCustomerSerializer, DispatchRegularlyConnectListSerializer, DispatchOrderConnectListSerializer
+    TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer, DispatchOrderTourCustomerSerializer, DispatchRegularlyConnectListSerializer, DispatchOrderConnectListSerializer, DispatchOrderConnectDetailSerializer, DispatchRegularlyConnectDetailSerializer  
 from my_settings import SUNGHWATOUR_CRED_PATH, CRED_PATH
 from itertools import chain
 from operator import itemgetter
@@ -136,6 +136,56 @@ class DailyListDispatches(APIView):
 
         return Response(response_data, status=status.HTTP_200_OK)
 
+# 일일 배차 상세 조회
+class DispatchDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        
+        # 쿼리 파라미터에서 'id'와 'work_type' 가져오기
+        dispatch_id = request.query_params.get('id')
+        work_type = request.query_params.get('work_type')
+
+        # 필수 파라미터가 없을 때 오류 처리
+        if not dispatch_id or not work_type:
+            return Response({
+                'result': 'false',
+                'data': 0,
+                'message': 'id와 work_type 파라미터가 필요합니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # work_type에 따라 다른 모델과 시리얼라이저를 선택
+        try:
+            if work_type == 'regularly':
+                dispatch = get_object_or_404(DispatchRegularlyConnect, id=dispatch_id)
+                serializer_class = DispatchRegularlyConnectDetailSerializer
+            elif work_type == 'order':
+                dispatch = get_object_or_404(DispatchOrderConnect, id=dispatch_id)
+                serializer_class = DispatchOrderConnectDetailSerializer
+            else:
+                return Response({
+                    'result': 'false',
+                    'data': None,
+                    'message': '유효하지 않은 work_type입니다. "regularly" 또는 "order" 중 하나여야 합니다.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # 선택한 시리얼라이저로 직렬화
+            serializer = serializer_class(dispatch)
+            
+            # 성공 응답 구성
+            return Response({
+                'result': 'true',
+                'data': serializer.data,
+                'message': '성공적으로 데이터를 가져왔습니다.'
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            # 객체가 없거나 기타 오류 발생 시 처리
+            return Response({
+                'result': 'false',
+                'data': None,
+                'message': f'오류가 발생했습니다: {str(e)}'
+            }, status=status.HTTP_404_NOT_FOUND if isinstance(e, (DispatchOrderConnect.DoesNotExist, DispatchRegularlyConnect.DoesNotExist)) else status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class DriverCheckView(APIView):
     def patch(self, request):
