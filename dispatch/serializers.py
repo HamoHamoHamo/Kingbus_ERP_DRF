@@ -55,7 +55,7 @@ class DispatchRegularlyConnectSerializer(serializers.ModelSerializer):
 # 정기배차리스트
 class DispatchRegularlyConnectListSerializer(serializers.ModelSerializer):
     work_type = serializers.ReadOnlyField(source="regularly_id.work_type")
-    bus_id = serializers.ReadOnlyField(source="bus_id.vehicle_num")
+    bus_num = serializers.ReadOnlyField(source="bus_id.vehicle_num")
     arrival = serializers.ReadOnlyField(source="regularly_id.arrival")
     maplink = serializers.ReadOnlyField(source="regularly_id.maplink")
     departure = serializers.ReadOnlyField(source="regularly_id.departure")
@@ -64,7 +64,7 @@ class DispatchRegularlyConnectListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DispatchRegularlyConnect
-        fields = ['id', 'work_type', 'bus_id', 'departure_date', 'arrival_date', 'departure', 'arrival', 'maplink', 'connect_check', 'is_vehicle_checked']
+        fields = ['id', 'work_type', 'bus_id', 'bus_num' ,'departure_date', 'arrival_date', 'departure', 'arrival', 'maplink', 'connect_check', 'is_vehicle_checked']
     
     def get_connect_check(self, obj):
         # connect_check 값을 "1" 또는 "0"으로 저장한 경우 "true"/"false"로 변환
@@ -128,16 +128,16 @@ class DispatchOrderSerializer(serializers.ModelSerializer):
 # 일반배차리스트
 class DispatchOrderConnectListSerializer(serializers.ModelSerializer):
     arrival = serializers.ReadOnlyField(source="order_id.arrival")
-    bus_id = serializers.ReadOnlyField(source="bus_id.vehicle_num")
+    bus_num = serializers.ReadOnlyField(source="bus_id.vehicle_num")
     departure = serializers.ReadOnlyField(source="order_id.departure")
     work_type = serializers.ReadOnlyField()
     maplink = serializers.SerializerMethodField()
     connect_check = serializers.SerializerMethodField()
-    is_vehicle_checked = serializers.SerializerMethodField()  # is_vehicle_checked 필드 추가
+    is_vehicle_checked = serializers.SerializerMethodField()  
 
     class Meta:
         model = DispatchOrderConnect
-        fields = ['id', 'work_type', 'bus_id', 'departure_date', 'arrival_date', 'departure', 'arrival', 'maplink', 'connect_check', 'is_vehicle_checked']
+        fields = ['id', 'work_type', 'bus_id', 'bus_num','departure_date', 'arrival_date', 'departure', 'arrival', 'maplink', 'connect_check', 'is_vehicle_checked']
     
     def get_maplink(self, obj):
         # 일반 배차에는 maplink가 없으므로 빈 문자열을 반환
