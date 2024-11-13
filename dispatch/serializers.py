@@ -3,12 +3,15 @@ from datetime import datetime, timedelta
 from rest_framework import serializers
 from django.shortcuts import get_object_or_404
 
+from common.validators import TimeFormatValidator, DateFormatValidator
 from .models import DispatchOrderStation, DispatchOrder, DispatchRegularly, \
     DispatchRegularlyConnect, DispatchOrderConnect, DriverCheck, ConnectRefusal, \
     DispatchRegularlyWaypoint, DispatchRegularlyRouteKnow, DispatchRegularlyData, \
-    RegularlyGroup, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrderTourCustomer
+    RegularlyGroup, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrderTourCustomer, ConnectStatusFieldMapping, StationArrivalTime
 from crudmember.models import Category
 from humanresource.models import Member
+
+WORK_TYPE_CHOICES = ['출근', '퇴근', '일반']
 
 class CheckTimeSerializer(serializers.ModelSerializer):
     class Meta:
@@ -157,6 +160,18 @@ class DriverCheckSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
+class DriverCheckRequestSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    work_type = serializers.ChoiceField(choices=WORK_TYPE_CHOICES)
+    time = serializers.CharField(validators=[TimeFormatValidator()])
+    type = serializers.ChoiceField(choices=[key.value for key in ConnectStatusFieldMapping.DRIVER_CHECK_STATUS_FIELD_MAP])
+
+class StationArrivalTimeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StationArrivalTime
+        exclude = ['creator']
+
+
 class ConnectRefusalSerializer(serializers.ModelSerializer):
     class Meta:
         model = ConnectRefusal
@@ -252,6 +267,9 @@ class EveningChecklistSerializer(serializers.ModelSerializer):
             'bus',
             'creator',
             'submit_check',
+            'checklist_submit_time',
+            'tomorrow_check_submit_time',
+            'get_off_submit_time',
         ]
 
     def get_bus(self, obj):
@@ -286,12 +304,12 @@ class DrivingHistorySerializer(serializers.ModelSerializer):
         ]
     def validate(self, attrs):
         super().validate(attrs)
-        if attrs['departure_date']:
+        if 'departure_date' in attrs:
             try:
                 datetime.strptime(attrs['departure_date'], "%Y-%m-%d %H:%M")
             except:
                 raise serializers.ValidationError("invalid date format")
-        if attrs['arrival_date']:
+        if 'arrival_date' in attrs:
             try:
                 datetime.strptime(attrs['arrival_date'], "%Y-%m-%d %H:%M")
             except:
@@ -305,6 +323,11 @@ class DrivingHistorySerializer(serializers.ModelSerializer):
         representation = super().to_representation(instance)
         representation['member'] = Member.objects.get(id=representation['member']).name if representation['member'] else None
         return representation
+
+class ConnectRequestSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    work_type = serializers.ChoiceField(choices=WORK_TYPE_CHOICES)
+
 
 class TeamRegularlyConnectSerializer(serializers.ModelSerializer):
     departure_time = serializers.SerializerMethodField()
@@ -417,3 +440,83 @@ class LocationHistorySerializer(serializers.ModelSerializer):
         model = DispatchRegularlyConnect
         fields = ['id', 'locations']
         read_only_fields = ['id']
+
+# 하루일과 배차데이터
+class DailyDispatchRegularlyConnectListSerializer(serializers.ModelSerializer):
+    dispatch_id = serializers.IntegerField(source='id')
+    departure = serializers.CharField(source='regularly_id.departure')
+    arrival = serializers.CharField(source='regularly_id.arrival')
+    bus_num = serializers.CharField(source='bus_id.vehicle_num')
+    status_info = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = DispatchRegularlyConnect
+        fields = [
+            'dispatch_id',
+            'work_type',
+            'bus_id',
+            'bus_num',
+            'departure',
+            'departure_date',
+            'arrival',
+            'arrival_date',
+            'status',
+            'status_info',
+        ]
+
+    def get_status_info(self, obj):
+        try:
+            driver_check = DriverCheck.objects.get(regularly_id=obj)
+        except DriverCheck.DoesNotExist:
+            return []
+
+        status_info = []
+        # 운행 준비, 탑승 및 운행 시작, 첫 정류장 도착, 운행 출발, 운행 종료 시간 데이터 리스트로 만들기
+        for status, field_name in ConnectStatusFieldMapping.DRIVER_CHECK_STATUS_FIELD_MAP.items():
+            completion_time = getattr(driver_check, field_name, "")
+            status_info.append({
+                "status_name": status.value,
+                "completion_time": completion_time
+            })
+        return status_info
+
+# 하루일과 배차데이터
+class DailyDispatchOrderConnectListSerializer(serializers.ModelSerializer):
+    dispatch_id = serializers.IntegerField(source='id')
+    departure = serializers.CharField(source='order_id.departure')
+    arrival = serializers.CharField(source='order_id.arrival')
+    bus_num = serializers.CharField(source='bus_id.vehicle_num')
+    status_info = serializers.CharField(default="", allow_blank=True)
+    
+    class Meta:
+        model = DispatchOrderConnect
+        fields = [
+            'dispatch_id',
+            'work_type',
+            'bus_num',
+            'departure',
+            'departure_date',
+            'arrival',
+            'arrival_date',
+            'status',
+            'status_info',
+        ]
+
+# 퇴근 데이터
+class GetOffWorkDataSerialzier(serializers.ModelSerializer):
+    roll_call_time = serializers.CharField(source='checklist_submit_time')
+    tomorrow_dispatch_check_time = serializers.CharField(source='tomorrow_check_submit_time')
+    get_off_time = serializers.CharField(source='get_off_submit_time')
+    
+
+    class Meta:
+        model = EveningChecklist
+        fields = [
+            'roll_call_time',
+            'tomorrow_dispatch_check_time',
+            'get_off_time',
+        ]
+
+class GetOffWorkRequestSerializer(serializers.Serializer):
+    date = serializers.CharField(validators=[DateFormatValidator()])
+    status_type = serializers.ChoiceField(choices=EveningChecklist.STATUS_TYPE_CHOCIES)

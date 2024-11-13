@@ -17,12 +17,12 @@ from trp_drf.settings import DATE_FORMAT, TODAY, BASE_DIR
 from firebase.firebase_file import upload_files
 from trp_drf.pagination import Pagination
 from humanresource.models import Member
-from dispatch.models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrder, DispatchOrderStation, DispatchOrderTour, DispatchOrderTourCustomer
+from .models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrder, DispatchOrderStation, DispatchOrderTour, DispatchOrderTourCustomer, ConnectStatusFieldMapping, ConnectStatus, StationArrivalTime
 from .services import DispatchRegularlyConnectService
 from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, \
     DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, DrivingHistorySerializer, \
     DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer, MorningChecklistSerializer, EveningChecklistSerializer, \
-    TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer, DispatchOrderTourCustomerSerializer, LocationHistoryRequestSerializer, LocationHistorySerializer
+    TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer, DispatchOrderTourCustomerSerializer, LocationHistoryRequestSerializer, LocationHistorySerializer, DriverCheckRequestSerializer, StationArrivalTimeSerializer, ConnectRequestSerializer, DailyDispatchOrderConnectListSerializer, DailyDispatchRegularlyConnectListSerializer, GetOffWorkDataSerialzier, GetOffWorkRequestSerializer
 from my_settings import SUNGHWATOUR_CRED_PATH, CRED_PATH
 
 from firebase.fcm_message import send_message
@@ -147,7 +147,121 @@ class LocationHistory(APIView):
 
         except Exception as e:
             return StandardResponse.get_response(False, '3', {'error': f"{e}"}, status.HTTP_400_BAD_REQUEST)
+
+class DailyGetOffWorkView(APIView):
+    serializer_class = GetOffWorkRequestSerializer
+    
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if not serializer.is_valid():
+            return StandardResponse.get_response(False, '1', {"error": str(serializer.errors)}, status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            checklist = EveningChecklist.objects.get(date=serializer.data['date'], member=request.user)
+            # 배차 확인
+            if serializer.data['status_type'] == EveningChecklist.STATUS_TYPE_CHOCIES[0]:
+                checklist.tomorrow_check_submit_time = str(datetime.now())[11:16]
+            # 퇴근
+            elif serializer.data['status_type'] == EveningChecklist.STATUS_TYPE_CHOCIES[1]:
+                checklist.get_off_submit_time = str(datetime.now())[11:16]
+            checklist.save()
+            data = EveningChecklistSerializer(checklist).data
+
+            return StandardResponse.get_response(True, data, "", status.HTTP_200_OK)
+        
+
+        except EveningChecklist.DoesNotExist:
+            return StandardResponse.get_response(False, '2', {"error": "EveningChecklist DoesNotExist"}, status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return StandardResponse.get_response(False, '3', {"error": str(e)}, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+
+class DailyRoutineView(APIView):
+    permission_classes = (IsAuthenticated,)
+    def get(self, request, date):
+        try:
+            datetime.strptime(date, DATE_FORMAT)
+        except ValueError:
+            return StandardResponse.get_response(False, "1", {"error": "Invalid date format"}, status.HTTP_400_BAD_REQUEST)
+
+        user = request.user
+
+        try:
             
+            tasks = self.get_connect_list(date, user)
+            get_off_work = self.get_get_off_work_data(date, user)
+
+        except EveningChecklist.DoesNotExist:
+            return StandardResponse.get_response(False, "2", {"error": "EveningChecklist DoesNotExist"}, status.HTTP_404_NOT_FOUND)
+ 
+        info = self.get_current_task(tasks, "2024-09-18 18:00")
+
+        data = {
+            "status": info['status'],
+            "info": info,
+            "tasks": tasks,
+            "get_off_work": get_off_work,
+        }
+        return StandardResponse.get_response(True, data, "", status.HTTP_200_OK)
+
+    # 배차 데이터 불러오기
+    def get_connect_list(self, date, user):
+        regularly_dispatches = DispatchRegularlyConnect.objects.filter(departure_date__startswith=date, driver_id=user).select_related('regularly_id', 'bus_id')
+        order_dispatches = DispatchOrderConnect.objects.filter(departure_date__startswith=date, driver_id=user).select_related('order_id', 'bus_id')
+
+        # 데이터 직렬화
+        regularly_serialized = DailyDispatchRegularlyConnectListSerializer(regularly_dispatches, many=True).data
+        order_serialized = DailyDispatchOrderConnectListSerializer(order_dispatches, many=True).data
+
+        # 두 데이터 리스트 합치기
+        combined_data = regularly_serialized + order_serialized
+
+        # departure_date 기준으로 정렬
+        combined_data = sorted(combined_data, key=lambda x: x["departure_date"])
+        return combined_data
+
+    # 퇴근 데이터 불러오기
+    def get_get_off_work_data(self, date, user):
+        try:
+            evening_checklist = EveningChecklist.objects.get(date=date, member=user)
+        except EveningChecklist.DoesNotExist:
+            raise # DoesNotExist 예외를 그대로 발생시킴
+        return GetOffWorkDataSerialzier(evening_checklist).data
+        
+    # 현재 해야하는 배차 정보 불러오기
+    def get_current_task(self, dispatches, current_time=str(datetime.now())[:16]):
+        """
+        현재 시간 이후의 도착 예정이고 운행 종료가 아닌 가장 첫 번째 배차를 찾습니다.
+        
+        Args:
+            dispatches (list): 배차 정보가 담긴 리스트
+            
+        Returns:
+            dict or None: 조건에 맞는 첫 번째 배차. 없으면 None 반환
+        """
+        
+        for dispatch in dispatches:            
+            # 상태가 '운행 완료'가 아닌 첫번째 배차정보 리턴
+            if dispatch['status'] != ConnectStatus.COMPLETE:
+                return {
+                    "dispatch_id": dispatch['dispatch_id'],
+                    "departure_time": dispatch['departure_date'][11:16],
+                    "bus_id": dispatch['bus_id'],
+                    "bus_num": dispatch['bus_num'],
+                    "departure": dispatch['departure'],
+                    "status": dispatch['status'],
+                }
+                
+        return {
+            "dispatch_id": "",
+            "departure_time": "",
+            "bus_id": "",
+            "bus_num": "",
+            "departure": "",
+            "status": "",
+        }  # 조건에 맞는 배차가 없는 경우
+
 class DriverCheckView(APIView):
     def patch(self, request):
         regularly_id = request.data['regularly_id']
@@ -209,6 +323,51 @@ class DriverCheckView(APIView):
             e_response['data'] = '1'
             e_response['message'] = serializer.errors
             return Response(e_response, status=status.HTTP_400_BAD_REQUEST)
+
+class DriverCheckView2(APIView):
+    def post(self, request):
+        request_serializer = DriverCheckRequestSerializer(data=request.data)
+        if not request_serializer.is_valid():
+            return StandardResponse.get_response(False, "1", request_serializer.errors, status.HTTP_400_BAD_REQUEST)
+
+        try:
+            connect_id = request_serializer.validated_data['id']
+            work_type = request_serializer.validated_data['work_type']
+
+            if work_type == '출근' or work_type == '퇴근':
+                driver_check = DriverCheck.objects.get(regularly_id=connect_id)
+                connect = driver_check.regularly_id
+            elif work_type == '일반':
+                driver_check = DriverCheck.objects.get(order_id=connect_id)
+                connect = driver_check.order_id
+            else:
+                return StandardResponse.get_response(False, "1", {"error": "work_type error"}, status.HTTP_400_BAD_REQUEST)
+            # type에 따라 시간 저장
+            time = request_serializer.validated_data['time']
+            time_type = request_serializer.validated_data['type']
+
+            # enum 활용해서 시간값 저장
+            setattr(driver_check, ConnectStatusFieldMapping.DRIVER_CHECK_STATUS_FIELD_MAP[time_type], time)
+            driver_check.save()
+            # type값에 따라 connect의 다음 status로 변경
+            connect.status = ConnectStatus.get_next_status(time_type)
+            connect.save()
+            
+            data = DriverCheckSerializer(driver_check).data
+            data['current_status'] = connect.status
+            return StandardResponse.get_response(True, data, "", status.HTTP_200_OK)
+
+
+        # 올바르지 않은 id
+        except DispatchRegularlyConnect.DoesNotExist:
+            error_message = {'id': "Invalid Id"}
+            return StandardResponse.get_response(False, '2', error_message, status.HTTP_404_NOT_FOUND)
+        # 올바르지 않은 id
+        except DispatchOrderConnect.DoesNotExist:
+            error_message = {'id': "Invalid Id"}
+            return StandardResponse.get_response(False, '2', error_message, status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return StandardResponse.get_response(False, '3', {'error': f"{e}"}, status.HTTP_400_BAD_REQUEST)
 
 class ConnectCheckView(APIView):
     def post(self, request):
@@ -279,7 +438,31 @@ class ConnectCheckView(APIView):
             return Response(response, status=status.HTTP_201_CREATED)
         else:
             return Response({"message": "Request Body Error."}, status=status.HTTP_409_CONFLICT)
-    
+
+class StationCheckView(APIView):
+    def post(self, request):
+        serializer = StationArrivalTimeSerializer(data=request.data)
+        if serializer.is_valid():
+            station_arrival_time = serializer.save()
+            station_arrival_time.creator = request.user
+            station_arrival_time.save()
+        else:
+            return StandardResponse.get_response(False, "1", serializer.errors, status.HTTP_400_BAD_REQUEST)
+        
+        # 운행 중이 아닐때 last='ture'이면 에러
+        if station_arrival_time.regularly_connect_id.status != ConnectStatus.DRIVING:
+            return StandardResponse.get_response(False, "2", {"error": "운행중이 아닙니다"}, status.HTTP_400_BAD_REQUEST)
+
+        # 마지막 정류장이면 Connect의 status 운행 중에서 운행 일보 작성으로 변경
+        if request.data['is_last_station'] == "true":
+            connect = station_arrival_time.regularly_connect_id
+            connect.status = ConnectStatus.get_next_status(ConnectStatus.DRIVING)
+            connect.save()
+            data = serializer.data
+            data['current_status'] = connect.status
+
+        return StandardResponse.get_response(True, data, "", status.HTTP_200_OK)
+        
 class RegularlyList(ListAPIView):
     serializer_class = DispatchRegularlyDataSerializer
     pagination_class = Pagination
@@ -477,6 +660,7 @@ class MorningChecklistView(APIView):
         if serializer.is_valid():
             instance = serializer.save()
             instance.submit_check = True
+            instance.submit_time = str(datetime.now())[11:16]
             instance.save()
             response = {
                 'result': 'true',
@@ -538,6 +722,7 @@ class EveningChecklistView(APIView):
         if serializer.is_valid():
             instance = serializer.save()
             instance.submit_check = True
+            instance.checklist_submit_time = str(datetime.now())[11:16]
             instance.save()
             response = {
                 'result': 'true',
@@ -630,6 +815,7 @@ class DrivingHistoryView(APIView):
         if serializer.is_valid():
             instance = serializer.save()
             instance.submit_check = True
+            instance.submit_time = str(datetime.now())[11:16]
             instance.date = date
             instance.save()
             response = {
@@ -646,6 +832,98 @@ class DrivingHistoryView(APIView):
             }
         }
         return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+class NewDrivingHistoryView(APIView):
+    def get(self, request):
+        
+        serializer = ConnectRequestSerializer(data=request.GET)
+
+        if not serializer.is_valid():
+            return StandardResponse.get_response(False, '1', {'error' : 'invalid connect id'}, status.HTTP_400_BAD_REQUEST)
+
+        id = self.request.GET.get('id')
+        work_type = self.request.GET.get('work_type')
+
+        try:
+            if work_type == '출근' or work_type == '퇴근':
+                connect = DispatchRegularlyConnect.objects.get(id=id)
+                driving_history = DrivingHistory.objects.get(regularly_connect_id=id)
+            else: # work_type == '일반'
+                connect = DispatchOrderConnect.objects.get(id=id)
+                driving_history = DrivingHistory.objects.get(order_connect_id=id)
+            
+            data = DrivingHistorySerializer(driving_history).data
+            return StandardResponse.get_response(True, data, "", status.HTTP_200_OK)
+
+        except DrivingHistory.DoesNotExist:
+            driving_history = DrivingHistory(
+                member = request.user,
+                creator = request.user,
+            )
+            if work_type == '출근' or work_type == '퇴근':
+                driving_history.regularly_connect_id = id
+            else:
+                driving_history.order_connect_id = id
+            driving_history.date = connect.departure_date[:10]
+            driving_history.save()
+        except DispatchOrderConnect.DoesNotExist:
+            return StandardResponse.get_response(False, '2', {'error' : 'Invalid connect id'}, status.HTTP_404_NOT_FOUND)
+        except DispatchRegularlyConnect.DoesNotExist:
+            return StandardResponse.get_response(False, '2', {'error' : 'Invalid connect id'}, status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return StandardResponse.get_response(False, '3', {'error' : f'{e}'}, status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request):
+        data = request.data.copy()
+        data['member'] = request.user.id
+        data['creator'] = request.user.id
+        
+        id = data['id']
+        work_type = data['work_type']
+
+        if not (work_type and id):
+            return StandardResponse.get_response(False, '1', {'error' : 'id and work_type'}, status.HTTP_400_BAD_REQUEST)
+
+        try:
+            if work_type == '출근' or work_type == '퇴근':
+                data['regularly_connect_id'] = id
+                connect = DispatchRegularlyConnect.objects.get(id=id)
+                driving_history = DrivingHistory.objects.get(regularly_connect_id=id)
+            elif work_type == '일반':
+                data['order_connect_id'] = id
+                connect = DispatchOrderConnect.objects.get(id=id)
+                driving_history = DrivingHistory.objects.get(order_connect_id=id)
+            else:
+                return StandardResponse.get_response(False, '1', {'error' : 'id and work_type'}, status.HTTP_400_BAD_REQUEST)
+            date = connect.departure_date[:10]
+
+        # id 에러
+        except DispatchOrderConnect.DoesNotExist:
+            return StandardResponse.get_response(False, '2', {'error' : 'Invalid connect id'}, status.HTTP_404_NOT_FOUND)
+        except DispatchRegularlyConnect.DoesNotExist:
+            return StandardResponse.get_response(False, '2', {'error' : 'Invalid connect id'}, status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return StandardResponse.get_response(False, '3', {'error' : str(e)}, status.HTTP_400_BAD_REQUEST)
+
+        serializer = DrivingHistorySerializer(driving_history, data=data)
+        
+        if serializer.is_valid():
+            instance = serializer.save()
+            instance.submit_check = True
+            instance.submit_time = str(datetime.now())[11:16]
+            instance.date = date
+            instance.save()
+            data = serializer.data
+
+            current_status = connect.status
+            # connect status 다음 상태 값으로 변경
+            if current_status == ConnectStatus.DRIVE_LOG_START or current_status == ConnectStatus.DRIVE_LOG_END:
+                connect.status = ConnectStatus.get_next_status(current_status)
+                connect.save()
+            
+            data['current_status'] = connect.status
+            return StandardResponse.get_response(True, data, "", status.HTTP_200_OK)
+        return StandardResponse.get_response(False, '4', serializer.errors, status.HTTP_400_BAD_REQUEST)
 
 class TeamConnectListView(APIView):
     def get(self, request):
