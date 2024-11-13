@@ -157,19 +157,22 @@ class DispatchDetailView(APIView):
 
         # work_type에 따라 다른 모델과 시리얼라이저를 선택
         try:
-            if work_type == 'regularly':
-                dispatch = get_object_or_404(DispatchRegularlyConnect, id=dispatch_id)
+            if work_type == '출근':
+                dispatch = get_object_or_404(DispatchRegularlyConnect, id=dispatch_id, work_type=work_type, driver_id=request.user)
                 serializer_class = DispatchRegularlyConnectDetailSerializer
-            elif work_type == 'order':
-                dispatch = get_object_or_404(DispatchOrderConnect, id=dispatch_id)
+            elif work_type == '퇴근':
+                dispatch = get_object_or_404(DispatchRegularlyConnect, id=dispatch_id, work_type=work_type, driver_id=request.user)
+                serializer_class = DispatchRegularlyConnectDetailSerializer                
+            elif work_type == '일반':
+                dispatch = get_object_or_404(DispatchOrderConnect, id=dispatch_id, work_type=work_type, driver_id=request.user)
                 serializer_class = DispatchOrderConnectDetailSerializer
             else:
                 return Response({
                     'result': 'false',
                     'data': None,
-                    'message': '유효하지 않은 work_type입니다. "regularly" 또는 "order" 중 하나여야 합니다.'
+                    'message': '유효하지 않은 work_type입니다.'
                 }, status=status.HTTP_400_BAD_REQUEST)
-
+            
             # 선택한 시리얼라이저로 직렬화
             serializer = serializer_class(dispatch)
             
@@ -179,14 +182,22 @@ class DispatchDetailView(APIView):
                 'data': serializer.data,
                 'message': '성공적으로 데이터를 가져왔습니다.'
             }, status=status.HTTP_200_OK)
+        
+        except Http404:
+            # get_object_or_404에서 발생하는 Http404 예외 처리
+            return Response({
+                'result': 'false',
+                'data': None,
+                'message': 'No matching DispatchOrderConnect or DispatchRegularlyConnect found for the given query.'
+            }, status=status.HTTP_404_NOT_FOUND)
 
         except Exception as e:
-            # 객체가 없거나 기타 오류 발생 시 처리
+            # 기타 예상치 못한 오류 처리
             return Response({
                 'result': 'false',
                 'data': None,
                 'message': f'오류가 발생했습니다: {str(e)}'
-            }, status=status.HTTP_404_NOT_FOUND if isinstance(e, (DispatchOrderConnect.DoesNotExist, DispatchRegularlyConnect.DoesNotExist)) else status.HTTP_500_INTERNAL_SERVER_ERROR)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class LocationHistory(APIView):
     permission_classes = (IsAuthenticated,)
