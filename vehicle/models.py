@@ -40,7 +40,7 @@ class Vehicle(models.Model):
     led = models.BooleanField(verbose_name='전광판유무', default=False)
     fridge = models.BooleanField(verbose_name='냉장고유무', default=False)
     sing = models.BooleanField(verbose_name='노래방유무', default=False)
-    usb = models.BooleanField(verbose_name='USB유무', default=False)
+    usb = models.BooleanField(verbose_name='USB 유무', default=False)
     water_heater = models.BooleanField(verbose_name='온수기유무', default=False)
     tv = models.BooleanField(verbose_name='tv유무', default=False)
 
@@ -107,6 +107,7 @@ class Vehicle(models.Model):
 
     def __str__(self):
         return f'{self.id} / {self.vehicle_num}'
+
 
 class Maintenance(models.Model):
     MAINTENANCE_CHOICES = [

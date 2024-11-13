@@ -16,11 +16,12 @@ from rest_framework.decorators import api_view, renderer_classes
 from rest_framework.renderers import JSONRenderer, TemplateHTMLRenderer
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework_simplejwt.tokens import RefreshToken
 from trp_drf.settings import BASE_DIR
 from my_settings import CLOUD_MEDIA_PATH, MAINTENANCE
 from trp_drf.pagination import Pagination
 from trp_drf.settings import DATE_FORMAT
-from django.http import Http404, HttpResponse, HttpResponseNotAllowed
+from django.http import Http404, HttpResponse, HttpResponseNotAllowed, JsonResponse
 from PIL import Image
 from firebase.media_firebase import upload_to_firebase
 
@@ -62,7 +63,12 @@ class UserLoginView(APIView):
                     'access': serializer.validated_data['access'],
                     'refresh': serializer.validated_data['refresh'],
                     'authenticatedUser': {
-                        'user_id': serializer.validated_data['user_id'],
+                        #name 추가
+                        'name': serializer.validated_data['name'],
+                        'role': serializer.validated_data['role'],
+                        'position': serializer.validated_data['position']
+                    },
+                    'authenticated_user': {
                         #name 추가
                         'name': serializer.validated_data['name'],
                         'role': serializer.validated_data['role'],
@@ -362,6 +368,12 @@ def salary_detail(request):
 
 def salary_detail_hourly(request):
     user = request.user
+    if user.role == '팀장':
+        return JsonResponse({
+                'result' : 'true',
+                'data' : '1',
+                'message' : '팀장',
+            })
     member_id_list = [user.id]
     
     context = {}
@@ -510,6 +522,10 @@ def salary_detail_hourly(request):
 
 class TokenRefreshView(jwt_views.TokenRefreshView):
     def post(self, request, *args, **kwargs):
+        refresh_token = request.data.get('refresh')
+        token = RefreshToken(refresh_token)
+        user_id = token.payload.get('user_id')
+        
         serializer = self.get_serializer(data=request.data)
 
         try:
@@ -520,10 +536,21 @@ class TokenRefreshView(jwt_views.TokenRefreshView):
                 'data' : 1,
                 'message' : {"token" : ["Token is invalid or expired"]},
             }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        
+
         if serializer.is_valid(raise_exception=False):
+            user = Member.objects.get(id=user_id)
+
+            data = serializer.validated_data
+            data['authenticated_user'] = {
+                'name': user.name,
+                'role': user.role,
+                'position': user.position,
+            }
             response = {
                 'result' : 'true',
-                'data' : serializer.validated_data,
+                'data' : data,
                 'message' : '',
             }
             return Response(response, status=status.HTTP_200_OK)
