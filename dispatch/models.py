@@ -10,6 +10,7 @@ from django.core.exceptions import BadRequest
 
 from common.datetime import get_hour_minute
 
+
 class ConnectStatus(str, Enum):
     BEFORE_DRIVE = "운행 전"
     PREPARE = "운행 준비"
@@ -304,8 +305,9 @@ class DispatchOrderConnect(models.Model):
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
     creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="connect_creator", db_column="creator_id", null=True)
+
     def __str__(self):
-        return f'{self.order_id.route} / {self.departure_date[2:10]}'
+        return f'{self.work_type} {self.order_id.route} / {self.departure_date[2:10]}'
 
 class DispatchRegularlyConnect(models.Model):
     regularly_id = models.ForeignKey(DispatchRegularly, on_delete=models.CASCADE, related_name="info_regularly", db_column="order_id", null=False)
@@ -324,6 +326,7 @@ class DispatchRegularlyConnect(models.Model):
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
     creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="connect_regularly_creator", db_column="creator_id", null=True)
+
     def __str__(self):
         return f'{self.work_type} {self.regularly_id} / {self.departure_date[2:10]}'
 
@@ -448,6 +451,7 @@ class EveningChecklist(models.Model):
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
     creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="evening_checklist_creator", db_column="creator_id", null=True)
 
+
 # Connect 생성될 때 signals에서 DrivingHistory 생성
 class DrivingHistory(models.Model):
     def get_connect_data(self):
@@ -540,6 +544,7 @@ class DispatchRegularlyStation(models.Model):
     pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
     creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="regularly_station_creator", db_column="creator_id", null=True)
+
     # def __str__(self):
     #     return f'{self.regularly.route} {self.station.name} {self.index} {self.station_type} {self.time}'
 

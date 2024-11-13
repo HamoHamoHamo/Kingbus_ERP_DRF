@@ -15,7 +15,6 @@ class StandardResponse:
         return Response(response_data, status=status_code)
 
 
-
 def set_response_false(data, message):
     # {
     #     'result': 'false',

@@ -4,7 +4,8 @@ from . import views
 
 urlpatterns = [
     path('monthly/<str:month>', views.MonthlyDispatches.as_view()),
-    path('daily/<str:date>', views.DailyDispatches.as_view()),
+    path('daily/list/<str:date>', views.DailyListDispatches.as_view()), # 일일배차리스트
+    path('daily/detail', views.DispatchDetailView.as_view()), # 상세배차리스트
     path('daily/detail/location-history', views.LocationHistory.as_view()),
     path('daily/routine/get-off-work', views.DailyGetOffWorkView.as_view()),
     path('daily/routine/<str:date>', views.DailyRoutineView.as_view()),

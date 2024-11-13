@@ -13,6 +13,7 @@ from humanresource.models import Member
 
 WORK_TYPE_CHOICES = ['출근', '퇴근', '일반']
 
+
 class CheckTimeSerializer(serializers.ModelSerializer):
     class Meta:
         model = DriverCheck
@@ -54,6 +55,59 @@ class DispatchRegularlyConnectSerializer(serializers.ModelSerializer):
         model = DispatchRegularlyConnect
         fields = ['id', 'price', 'driver_allowance', 'work_type', 'route', 'location', 'check_regularly_connect', 'detailed_route', 'maplink', 'group', 'references', 'departure', 'arrival', 'week', 'route', 'departure_date', 'arrival_date', 'bus_id', 'price', 'driver_allowance', 'waypoint']
 
+# 정기배차리스트
+class DispatchRegularlyConnectListSerializer(serializers.ModelSerializer):
+    work_type = serializers.ReadOnlyField(source="regularly_id.work_type")
+    bus_num = serializers.ReadOnlyField(source="bus_id.vehicle_num")
+    arrival = serializers.ReadOnlyField(source="regularly_id.arrival")
+    maplink = serializers.ReadOnlyField(source="regularly_id.maplink")
+    departure = serializers.ReadOnlyField(source="regularly_id.departure")
+    connect_check = serializers.SerializerMethodField() 
+    is_vehicle_checked = serializers.SerializerMethodField() 
+
+    class Meta:
+        model = DispatchRegularlyConnect
+        fields = ['id', 'work_type', 'bus_id', 'bus_num' ,'departure_date', 'arrival_date', 'departure', 'arrival', 'maplink', 'connect_check', 'is_vehicle_checked']
+    
+    def get_connect_check(self, obj):
+        # connect_check 값을 "1" 또는 "0"으로 저장한 경우 "true"/"false"로 변환
+        check_value = obj.check_regularly_connect.connect_check if obj.check_regularly_connect else "0"
+        return "true" if check_value == "1" else "false"    
+    
+    def get_is_vehicle_checked(self, obj):
+        # departure_date에서 날짜 부분만 추출
+        try:
+            formatted_date = datetime.strptime(obj.departure_date[:10], "%Y-%m-%d").strftime("%Y-%m-%d")
+        except ValueError:
+            return "false"  # 형식이 맞지 않는 경우 기본값 반환
+
+        # 정확히 날짜와 버스 ID가 일치하는 DailyChecklist 조회
+        checklist = DailyChecklist.objects.filter(bus_id=obj.bus_id, date=formatted_date).first()
+        return "true" if checklist and checklist.submit_check else "false"
+
+# 정기배차 정류장
+class DispatchRegularlyStationSerializer(serializers.ModelSerializer):
+    station_name = serializers.ReadOnlyField(source="station.name")  # 정류장 이름
+    station_type = serializers.ReadOnlyField()  # 정류장 종류
+    latitude = serializers.ReadOnlyField(source="station.latitude")  # 위도
+    longitude = serializers.ReadOnlyField(source="station.longitude")  # 경도
+    target_time = serializers.ReadOnlyField(source="time")  # DispatchRegularlyDataStation의 time을 target_time으로 사용
+    
+    class Meta:
+        model = DispatchRegularlyStation  # DispatchRegularlyStation에서 정보를 가져옴
+        fields = ['id', 'station_name', 'station_type', 'latitude', 'longitude','target_time']
+
+# 정기배차상세
+class DispatchRegularlyConnectDetailSerializer(serializers.ModelSerializer):
+    stations = DispatchRegularlyStationSerializer(source="regularly_id.regularly_station", many=True)  # regularly_id를 통해 연결된 regularly_station 가져옴
+    bus_num = serializers.ReadOnlyField(source="bus_id.vehicle_num")  # 버스 번호
+    references = serializers.ReadOnlyField(source="regularly_id.references")  # DispatchRegularly 모델의 references 필드
+
+    class Meta:
+        model = DispatchRegularlyConnect  # 정기 배차 모델
+        fields = ['id', 'work_type', 'bus_id', 'bus_num', 'stations', 'references']
+
+
 class DispatchOrderStationSerializer(serializers.ModelSerializer):
     waypoint = serializers.SerializerMethodField()
 
@@ -73,6 +127,56 @@ class DispatchOrderSerializer(serializers.ModelSerializer):
         model = DispatchOrder
         # fields = ['references', 'route']
         fields = ['waypoint']
+
+# 일반배차리스트
+class DispatchOrderConnectListSerializer(serializers.ModelSerializer):
+    arrival = serializers.ReadOnlyField(source="order_id.arrival")
+    bus_num = serializers.ReadOnlyField(source="bus_id.vehicle_num")
+    departure = serializers.ReadOnlyField(source="order_id.departure")
+    work_type = serializers.ReadOnlyField()
+    maplink = serializers.SerializerMethodField()
+    connect_check = serializers.SerializerMethodField()
+    is_vehicle_checked = serializers.SerializerMethodField()  
+
+
+    class Meta:
+        model = DispatchOrderConnect
+        fields = ['id', 'work_type', 'bus_id', 'bus_num','departure_date', 'arrival_date', 'departure', 'arrival', 'maplink', 'connect_check', 'is_vehicle_checked']
+    
+    def get_maplink(self, obj):
+        # 일반 배차에는 maplink가 없으므로 빈 문자열을 반환
+        return ""
+    
+    def get_connect_check(self, obj):
+        # connect_check 값을 "1" 또는 "0"으로 저장한 경우 "true"/"false"로 변환
+        check_value = obj.check_order_connect.connect_check if obj.check_order_connect else "0"
+        return "true" if check_value == "1" else "false"    
+
+    def get_is_vehicle_checked(self, obj):
+        # departure_date에서 날짜 부분만 추출
+        try:
+            formatted_date = datetime.strptime(obj.departure_date[:10], "%Y-%m-%d").strftime("%Y-%m-%d")
+        except ValueError:
+            return "false"  # 형식이 맞지 않는 경우 기본값 반환
+
+        # 정확히 날짜와 버스 ID가 일치하는 DailyChecklist 조회
+        checklist = DailyChecklist.objects.filter(bus_id=obj.bus_id, date=formatted_date).first()
+        return "true" if checklist and checklist.submit_check else "false"
+    
+# 일반배차상세
+class DispatchOrderConnectDetailSerializer(serializers.ModelSerializer):
+    stations = serializers.SerializerMethodField()  # 항상 null 반환
+    bus_num = serializers.ReadOnlyField(source="bus_id.vehicle_num")  # 버스 번호
+    references = serializers.ReadOnlyField(source="order_id.references")  # DispatchOrder 모델의 references 필드
+
+    class Meta:
+        model = DispatchOrderConnect
+        fields = ['id', 'work_type', 'bus_id', 'bus_num', 'stations', 'references']
+
+    def get_stations(self, obj):
+        # 일반 배차의 경우 stations는 빈 리스트로 반환
+        return []
+    
 
 class DispatchOrderConnectSerializer(serializers.ModelSerializer):
     waypoint = DispatchOrderStationSerializer(many=True, source="order_id.station")
@@ -170,7 +274,6 @@ class StationArrivalTimeSerializer(serializers.ModelSerializer):
     class Meta:
         model = StationArrivalTime
         exclude = ['creator']
-
 
 class ConnectRefusalSerializer(serializers.ModelSerializer):
     class Meta:
@@ -270,6 +373,7 @@ class EveningChecklistSerializer(serializers.ModelSerializer):
             'checklist_submit_time',
             'tomorrow_check_submit_time',
             'get_off_submit_time',
+
         ]
 
     def get_bus(self, obj):
@@ -304,11 +408,13 @@ class DrivingHistorySerializer(serializers.ModelSerializer):
         ]
     def validate(self, attrs):
         super().validate(attrs)
+
         if 'departure_date' in attrs:
             try:
                 datetime.strptime(attrs['departure_date'], "%Y-%m-%d %H:%M")
             except:
                 raise serializers.ValidationError("invalid date format")
+
         if 'arrival_date' in attrs:
             try:
                 datetime.strptime(attrs['arrival_date'], "%Y-%m-%d %H:%M")

@@ -22,8 +22,10 @@ from .services import DispatchRegularlyConnectService
 from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, \
     DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, DrivingHistorySerializer, \
     DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer, MorningChecklistSerializer, EveningChecklistSerializer, \
-    TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer, DispatchOrderTourCustomerSerializer, LocationHistoryRequestSerializer, LocationHistorySerializer, DriverCheckRequestSerializer, StationArrivalTimeSerializer, ConnectRequestSerializer, DailyDispatchOrderConnectListSerializer, DailyDispatchRegularlyConnectListSerializer, GetOffWorkDataSerialzier, GetOffWorkRequestSerializer
+    TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer, DispatchOrderTourCustomerSerializer, LocationHistoryRequestSerializer, LocationHistorySerializer, DriverCheckRequestSerializer, StationArrivalTimeSerializer, ConnectRequestSerializer, DailyDispatchOrderConnectListSerializer, DailyDispatchRegularlyConnectListSerializer, GetOffWorkDataSerialzier, GetOffWorkRequestSerializer, DispatchRegularlyConnectListSerializer, DispatchOrderConnectListSerializer, DispatchOrderConnectDetailSerializer, DispatchRegularlyConnectDetailSerializer
 from my_settings import SUNGHWATOUR_CRED_PATH, CRED_PATH
+from itertools import chain
+from operator import itemgetter
 
 from firebase.fcm_message import send_message
 from firebase_admin import firestore
@@ -98,6 +100,93 @@ class DailyDispatches(APIView):
             'message' : '',
         }
         return Response(response, status=status.HTTP_200_OK)
+
+# 일일 배차 리스트
+class DailyListDispatches(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request, date):
+        # 날짜 형식 검사
+        try:
+            datetime.strptime(date, "%Y-%m-%d")  # DATE_FORMAT이 "%Y-%m-%d" 형식이라고 가정
+        except ValueError:
+            return Response({
+                'result': 'false',
+                'data': '1',
+                'message': {'error': 'Invalid date format'}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 사용자 및 날짜 조건으로 정기 배차와 주문 배차 데이터 가져오기
+        user = request.user
+        regularly_dispatches = DispatchRegularlyConnect.objects.filter(departure_date__startswith=date, driver_id=user)
+        order_dispatches = DispatchOrderConnect.objects.filter(departure_date__startswith=date, driver_id=user)
+
+        # 데이터 직렬화
+        regularly_serialized = DispatchRegularlyConnectListSerializer(regularly_dispatches, many=True).data
+        order_serialized = DispatchOrderConnectListSerializer(order_dispatches, many=True).data
+
+        # 두 리스트를 하나로 합친 후 departure_date(또는 departure_time) 기준으로 정렬
+        combined_dispatches = list(chain(regularly_serialized, order_serialized))
+        combined_dispatches.sort(key=itemgetter('departure_date'))  # departure_date로 정렬
+
+        response_data = {
+            'result': 'true',
+            'data': combined_dispatches,
+            'message': ''
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
+# 일일 배차 상세 조회
+class DispatchDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        
+        # 쿼리 파라미터에서 'id'와 'work_type' 가져오기
+        dispatch_id = request.query_params.get('id')
+        work_type = request.query_params.get('work_type')
+
+        # 필수 파라미터가 없을 때 오류 처리
+        if not dispatch_id or not work_type:
+            return Response({
+                'result': 'false',
+                'data': 0,
+                'message': 'id와 work_type 파라미터가 필요합니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # work_type에 따라 다른 모델과 시리얼라이저를 선택
+        try:
+            if work_type == 'regularly':
+                dispatch = get_object_or_404(DispatchRegularlyConnect, id=dispatch_id)
+                serializer_class = DispatchRegularlyConnectDetailSerializer
+            elif work_type == 'order':
+                dispatch = get_object_or_404(DispatchOrderConnect, id=dispatch_id)
+                serializer_class = DispatchOrderConnectDetailSerializer
+            else:
+                return Response({
+                    'result': 'false',
+                    'data': None,
+                    'message': '유효하지 않은 work_type입니다. "regularly" 또는 "order" 중 하나여야 합니다.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # 선택한 시리얼라이저로 직렬화
+            serializer = serializer_class(dispatch)
+            
+            # 성공 응답 구성
+            return Response({
+                'result': 'true',
+                'data': serializer.data,
+                'message': '성공적으로 데이터를 가져왔습니다.'
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            # 객체가 없거나 기타 오류 발생 시 처리
+            return Response({
+                'result': 'false',
+                'data': None,
+                'message': f'오류가 발생했습니다: {str(e)}'
+            }, status=status.HTTP_404_NOT_FOUND if isinstance(e, (DispatchOrderConnect.DoesNotExist, DispatchRegularlyConnect.DoesNotExist)) else status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class LocationHistory(APIView):
     permission_classes = (IsAuthenticated,)
