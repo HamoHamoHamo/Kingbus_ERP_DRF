@@ -7,8 +7,9 @@ from common.validators import TimeFormatValidator, DateFormatValidator
 from .models import DispatchOrderStation, DispatchOrder, DispatchRegularly, \
     DispatchRegularlyConnect, DispatchOrderConnect, DriverCheck, ConnectRefusal, \
     DispatchRegularlyWaypoint, DispatchRegularlyRouteKnow, DispatchRegularlyData, \
-    RegularlyGroup, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrderTourCustomer, ConnectStatusFieldMapping, StationArrivalTime
+    RegularlyGroup, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrderTourCustomer, ConnectStatusFieldMapping, StationArrivalTime, DispatchRegularlyStation
 from crudmember.models import Category
+from vehicle.models import DailyChecklist
 from humanresource.models import Member
 
 WORK_TYPE_CHOICES = ['출근', '퇴근', '일반']
