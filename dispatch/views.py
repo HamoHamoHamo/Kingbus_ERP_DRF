@@ -174,7 +174,7 @@ class DispatchDetailView(APIView):
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             # 선택한 시리얼라이저로 직렬화
-            serializer = serializer_class(dispatch)
+            serializer = serializer_class(dispatch, context={'work_type': work_type})
             
             # 성공 응답 구성
             return Response({
