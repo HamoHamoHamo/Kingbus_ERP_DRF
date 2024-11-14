@@ -94,10 +94,16 @@ class DispatchRegularlyStationSerializer(serializers.ModelSerializer):
     latitude = serializers.ReadOnlyField(source="station.latitude")  # 위도
     longitude = serializers.ReadOnlyField(source="station.longitude")  # 경도
     target_time = serializers.ReadOnlyField(source="time")  # DispatchRegularlyDataStation의 time을 target_time으로 사용
-    
+    arrival_time = serializers.SerializerMethodField()  # 도착 시간을 SerializerMethodField로 변경
+
     class Meta:
         model = DispatchRegularlyStation  # DispatchRegularlyStation에서 정보를 가져옴
-        fields = ['id', 'station_name', 'station_type', 'latitude', 'longitude','target_time']
+        fields = ['id', 'station_name', 'station_type', 'latitude', 'longitude', 'target_time', 'arrival_time']
+    
+    def get_arrival_time(self, obj):
+        # 해당 정류장에 연결된 StationArrivalTime 가져오기
+        arrival_time_entry = obj.station_arrival_time.first()  # station_arrival_time은 related_name
+        return arrival_time_entry.arrival_time if arrival_time_entry else None       
 
 # 정기배차상세
 class DispatchRegularlyConnectDetailSerializer(serializers.ModelSerializer):
@@ -107,7 +113,7 @@ class DispatchRegularlyConnectDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DispatchRegularlyConnect  # 정기 배차 모델
-        fields = ['id', 'work_type', 'bus_id', 'bus_num', 'stations', 'references']
+        fields = ['id', 'work_type', 'bus_id', 'bus_num', 'stations', 'references', 'locations']
 
 
 class DispatchOrderStationSerializer(serializers.ModelSerializer):
@@ -171,14 +177,19 @@ class DispatchOrderConnectDetailSerializer(serializers.ModelSerializer):
     stations = serializers.SerializerMethodField()  # 항상 null 반환
     bus_num = serializers.ReadOnlyField(source="bus_id.vehicle_num")  # 버스 번호
     references = serializers.ReadOnlyField(source="order_id.references")  # DispatchOrder 모델의 references 필드
+    locations = serializers.SerializerMethodField()  # 항상 null 반환
 
     class Meta:
         model = DispatchOrderConnect
-        fields = ['id', 'work_type', 'bus_id', 'bus_num', 'stations', 'references']
+        fields = ['id', 'work_type', 'bus_id', 'bus_num', 'stations', 'references', 'locations']
 
     def get_stations(self, obj):
         # 일반 배차의 경우 stations는 빈 리스트로 반환
-        return []
+        return None
+    
+    def get_locations(self, obj):
+        # 일반 배차의 경우 stations는 빈 리스트로 반환
+        return None
     
 
 class DispatchOrderConnectSerializer(serializers.ModelSerializer):
