@@ -99,7 +99,7 @@ class DispatchRegularlyStationSerializer(serializers.ModelSerializer):
     class Meta:
         model = DispatchRegularlyStation  # DispatchRegularlyStation에서 정보를 가져옴
         fields = ['id', 'station_name', 'station_type', 'latitude', 'longitude', 'target_time', 'arrival_time']
-    
+
     def get_arrival_time(self, obj):
         # 해당 정류장에 연결된 StationArrivalTime 가져오기
         arrival_time_entry = obj.station_arrival_time.first()  # station_arrival_time은 related_name
@@ -107,13 +107,26 @@ class DispatchRegularlyStationSerializer(serializers.ModelSerializer):
 
 # 정기배차상세
 class DispatchRegularlyConnectDetailSerializer(serializers.ModelSerializer):
-    stations = DispatchRegularlyStationSerializer(source="regularly_id.regularly_station", many=True)  # regularly_id를 통해 연결된 regularly_station 가져옴
+    stations = serializers.SerializerMethodField()  # 필터링된 정류장 목록 가져오기
     bus_num = serializers.ReadOnlyField(source="bus_id.vehicle_num")  # 버스 번호
     references = serializers.ReadOnlyField(source="regularly_id.references")  # DispatchRegularly 모델의 references 필드
 
     class Meta:
         model = DispatchRegularlyConnect  # 정기 배차 모델
         fields = ['id', 'work_type', 'bus_id', 'bus_num', 'stations', 'references', 'locations']
+    
+    def get_stations(self, obj):
+        # obj의 work_type에 따라 정류장을 필터링
+        work_type = obj.work_type  # DispatchRegularlyConnect 인스턴스의 work_type
+
+        if work_type == '출근':
+            filtered_stations = obj.regularly_id.regularly_station.filter(station_type__in=['정류장', '사업장'])
+        elif work_type == '퇴근':
+            filtered_stations = obj.regularly_id.regularly_station.filter(station_type__in=['사업장', '정류장', '마지막 정류장'])
+        else:
+            filtered_stations = obj.regularly_id.regularly_station.all()  # 기본값은 전체 정류장
+
+        return DispatchRegularlyStationSerializer(filtered_stations, many=True).data
 
 
 class DispatchOrderStationSerializer(serializers.ModelSerializer):
