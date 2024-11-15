@@ -12,6 +12,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from common.constant import DATE_TIME_FORMAT
 from common.response import set_response_false, set_response_true, StandardResponse
 from trp_drf.settings import DATE_FORMAT, TODAY, BASE_DIR
 from firebase.firebase_file import upload_files
@@ -460,28 +461,31 @@ class DriverCheckView2(APIView):
         regularly_connects, order_connects = DispatchConnectService.get_daily_connect_list(date, user)
         
         # 두 데이터 리스트 합치기
-        combined_data = list(regularly_connects.value('departure_date', 'status', 'id', 'work_type')) + list(order_connects.value('departure_date', 'status', 'id', 'work_type'))
+        combined_data = list(regularly_connects.values('departure_date', 'status', 'id', 'work_type')) + list(order_connects.values('departure_date', 'status', 'id', 'work_type'))
         # departure_date 기준으로 정렬
         combined_data = sorted(combined_data, key=lambda x: x["departure_date"])
 
         # 다음 진행할 배차 찾기
         next_connect = DispatchConnectService.get_current_connect(combined_data)
         if next_connect:
-            if next_connect['work_type'] == "출근" or next_connect['work_type'] == "출근":
+            if next_connect['work_type'] == "출근" or next_connect['work_type'] == "퇴근":
                 driver_check = DriverCheck.objects.get(regularly_id=next_connect['id'])
-            if next_connect['work_type'] == "일반":
+                connect = DispatchRegularlyConnect.objects.get(id=next_connect['id'])
+            # 일반
+            else:
                 driver_check = DriverCheck.objects.get(regularly_id=next_connect['id'])
+                connect = DispatchOrderConnect.objects.get(id=next_connect['id'])
 
             # 다음 배차의 1시간, 20분 전 시간이 현재 배차의 운행시간과 겹치는 경우 has_issue 값을 False로 바꿔줌
             # 겹치지 않는 경우, has_issue 기본값이 True라서 아래 조건 통과하고 운행 준비부터 순차적으로 진행
             # 운행시작시간(1시간 전)에 문제가 없다면 운행일보 작성으로
             if not driver_check.drive_time_has_issue:
-                next_connect.status = ConnectStatus.DRIVE_LOG_START
-                next_connect.save()
+                connect.status = ConnectStatus.DRIVE_LOG_START
+                connect.save()
             # 기상확인시간(1시간 30분 전)에 문제가 없다면 탑승 및 운행 시작으로
             elif not driver_check.wake_time_has_issue:
-                next_connect.status = ConnectStatus.BOARDING
-                next_connect.save()
+                connect.status = ConnectStatus.BOARDING
+                connect.save()
         return 
 
 
@@ -758,14 +762,7 @@ class MorningChecklistView(APIView):
             datetime.strptime(date, DATE_FORMAT)
             datetime.strptime(request.data['arrival_time'], "%H:%M")
         except Exception as e:
-            response = {
-                'result': 'false',
-                'data': '1',
-                'message': {
-                    'error' : 'invalid date format'
-                },
-            }
-            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+            return StandardResponse.get_response(False, '1', {'error' : 'invalid date format'}, status.HTTP_400_BAD_REQUEST)
         
         try:
             checklist = MorningChecklist.objects.filter(date=date).get(member=request.user)    
@@ -778,12 +775,11 @@ class MorningChecklistView(APIView):
             instance.submit_check = True
             instance.submit_time = str(datetime.now())[11:16]
             instance.save()
-            response = {
-                'result': 'true',
-                'data': serializer.data,
-                'message': ''
-            }
-            return Response(response, status=status.HTTP_200_OK)
+
+            # 오늘 배차 모두 확인해서 도착시간과 다음 배차의 1시간 전, 20분 전 중복되는 부분 찾아서 has_issue 값 변경
+            self.check_daily_connects(date, request.user)
+
+            return StandardResponse.get_response(True, serializer.data, "", status.HTTP_200_OK)
         response = {
             'result': 'false',
             'data': '2',
@@ -792,7 +788,37 @@ class MorningChecklistView(APIView):
             }
         }
         return Response(response, status=status.HTTP_400_BAD_REQUEST)
+    
+    def check_daily_connects(self, date, user):
+        regularly_connects, order_connects = DispatchConnectService.get_daily_connect_list(date, user)
+        combined_data = list(regularly_connects.values('departure_date', 'arrival_date', 'id', 'work_type')) + list(order_connects.values('departure_date', 'arrival_date', 'id', 'work_type'))
+        # departure_date 기준으로 정렬
+        combined_data = sorted(combined_data, key=lambda x: x["departure_date"])
 
+        # combined_data 순회하며 조건 확인
+        for i in range(len(combined_data) - 1):  # 마지막 요소는 다음 배차가 없으므로 제외
+            current_data = combined_data[i]
+            next_data = combined_data[i + 1]
+            
+            current_arrival_date = datetime.strptime(current_data["arrival_date"], DATE_TIME_FORMAT)
+            next_departure_date = datetime.strptime(next_data["departure_date"], DATE_TIME_FORMAT)
+
+            # 다음 배차의 departure_date - 1시간 < 현재 배차의 arrival_date 조건
+            if next_departure_date - timedelta(hours=1) <= current_arrival_date:
+                if next_data['work_type'] == '출근' or next_data['work_type'] == '퇴근':
+                    driver_check = DriverCheck.objects.get(regularly_id=next_data['id'])
+                elif next_data['work_type'] == '일반':
+                    driver_check = DriverCheck.objects.get(order_id=next_data['id'])
+                driver_check.wake_time_has_issue = False
+                print("")
+                driver_check.save()
+
+            # 다음 배차의 departure_date - 20분 < 현재 배차의 arrival_date 조건
+            if next_departure_date - timedelta(minutes=20) <= current_arrival_date:
+                driver_check.drive_time_has_issue = False
+                driver_check.save()
+
+        
 class EveningChecklistView(APIView):
     def get(self, request, date):
         try:
