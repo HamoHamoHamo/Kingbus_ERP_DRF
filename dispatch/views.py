@@ -18,7 +18,7 @@ from firebase.firebase_file import upload_files
 from trp_drf.pagination import Pagination
 from humanresource.models import Member
 from .models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrder, DispatchOrderStation, DispatchOrderTour, DispatchOrderTourCustomer, ConnectStatusFieldMapping, ConnectStatus, StationArrivalTime
-from .services import DispatchRegularlyConnectService
+from .services import DispatchConnectService
 from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, \
     DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, DrivingHistorySerializer, \
     DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer, MorningChecklistSerializer, EveningChecklistSerializer, \
@@ -267,7 +267,6 @@ class DailyGetOffWorkView(APIView):
 
 
 class DailyRoutineView(APIView):
-    permission_classes = (IsAuthenticated,)
     def get(self, request, date):
         try:
             datetime.strptime(date, DATE_FORMAT)
@@ -276,15 +275,9 @@ class DailyRoutineView(APIView):
 
         user = request.user
 
-        try:
-            
-            tasks = self.get_connect_list(date, user)
-            get_off_work = self.get_get_off_work_data(date, user)
-
-        except EveningChecklist.DoesNotExist:
-            return StandardResponse.get_response(False, "2", {"error": "EveningChecklist DoesNotExist"}, status.HTTP_404_NOT_FOUND)
- 
-        info = self.get_current_task(tasks, "2024-09-18 18:00")
+        tasks = self.get_connect_list(date, user)
+        get_off_work = self.get_get_off_work_data(date, user)
+        info = self.get_current_task(tasks)
 
         data = {
             "status": info['status'],
@@ -296,12 +289,11 @@ class DailyRoutineView(APIView):
 
     # 배차 데이터 불러오기
     def get_connect_list(self, date, user):
-        regularly_dispatches = DispatchRegularlyConnect.objects.filter(departure_date__startswith=date, driver_id=user).select_related('regularly_id', 'bus_id')
-        order_dispatches = DispatchOrderConnect.objects.filter(departure_date__startswith=date, driver_id=user).select_related('order_id', 'bus_id')
+        regularly_connects, order_connects = DispatchConnectService.get_daily_connect_list(date, user)
 
         # 데이터 직렬화
-        regularly_serialized = DailyDispatchRegularlyConnectListSerializer(regularly_dispatches, many=True).data
-        order_serialized = DailyDispatchOrderConnectListSerializer(order_dispatches, many=True).data
+        regularly_serialized = DailyDispatchRegularlyConnectListSerializer(regularly_connects, many=True).data
+        order_serialized = DailyDispatchOrderConnectListSerializer(order_connects, many=True).data
 
         # 두 데이터 리스트 합치기
         combined_data = regularly_serialized + order_serialized
@@ -309,39 +301,19 @@ class DailyRoutineView(APIView):
         # departure_date 기준으로 정렬
         combined_data = sorted(combined_data, key=lambda x: x["departure_date"])
         return combined_data
-
-    # 퇴근 데이터 불러오기
-    def get_get_off_work_data(self, date, user):
-        try:
-            evening_checklist = EveningChecklist.objects.get(date=date, member=user)
-        except EveningChecklist.DoesNotExist:
-            raise # DoesNotExist 예외를 그대로 발생시킴
-        return GetOffWorkDataSerialzier(evening_checklist).data
-        
-    # 현재 해야하는 배차 정보 불러오기
-    def get_current_task(self, dispatches, current_time=str(datetime.now())[:16]):
-        """
-        현재 시간 이후의 도착 예정이고 운행 종료가 아닌 가장 첫 번째 배차를 찾습니다.
-        
-        Args:
-            dispatches (list): 배차 정보가 담긴 리스트
-            
-        Returns:
-            dict or None: 조건에 맞는 첫 번째 배차. 없으면 None 반환
-        """
-        
-        for dispatch in dispatches:            
-            # 상태가 '운행 완료'가 아닌 첫번째 배차정보 리턴
-            if dispatch['status'] != ConnectStatus.COMPLETE:
-                return {
-                    "dispatch_id": dispatch['dispatch_id'],
-                    "departure_time": dispatch['departure_date'][11:16],
-                    "bus_id": dispatch['bus_id'],
-                    "bus_num": dispatch['bus_num'],
-                    "departure": dispatch['departure'],
-                    "status": dispatch['status'],
-                }
-                
+    
+    def get_current_task(self, tasks):
+        current_connect = DispatchConnectService.get_current_connect(tasks)
+        if current_connect:
+            return {
+                "dispatch_id": current_connect['dispatch_id'],
+                "departure_time": current_connect['departure_date'][11:16],
+                "bus_id": current_connect['bus_id'],
+                "bus_num": current_connect['bus_num'],
+                "departure": current_connect['departure'],
+                "status": current_connect['status'],
+            }
+        # 조건에 맞는 배차가 없는 경우
         return {
             "dispatch_id": "",
             "departure_time": "",
@@ -349,7 +321,17 @@ class DailyRoutineView(APIView):
             "bus_num": "",
             "departure": "",
             "status": "",
-        }  # 조건에 맞는 배차가 없는 경우
+        }
+
+    
+    # 퇴근 데이터 불러오기
+    def get_get_off_work_data(self, date, user):
+        try:
+            evening_checklist = EveningChecklist.objects.get(date=date, member=user)
+        except EveningChecklist.DoesNotExist:
+            evening_checklist = EveningChecklist.create_new(date, user)
+        return GetOffWorkDataSerialzier(evening_checklist).data
+    
 
 class DriverCheckView(APIView):
     def patch(self, request):
@@ -441,7 +423,11 @@ class DriverCheckView2(APIView):
             # type값에 따라 connect의 다음 status로 변경
             connect.status = ConnectStatus.get_next_status(time_type)
             connect.save()
-            
+
+            # 운행종료일때 다음 배차의 has_issue 확인하여 status 다음 배차 status 변경 
+            if time_type == ConnectStatus.END:
+                self.set_next_status(connect, request.user)
+
             data = DriverCheckSerializer(driver_check).data
             data['current_status'] = connect.status
             return StandardResponse.get_response(True, data, "", status.HTTP_200_OK)
@@ -457,6 +443,36 @@ class DriverCheckView2(APIView):
             return StandardResponse.get_response(False, '2', error_message, status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return StandardResponse.get_response(False, '3', {'error': f"{e}"}, status.HTTP_400_BAD_REQUEST)
+
+    def set_next_status(self, connect, user):
+        date = connect.departure_date[:10]
+        regularly_connects, order_connects = DispatchConnectService.get_daily_connect_list(date, user)
+        
+        # 두 데이터 리스트 합치기
+        combined_data = list(regularly_connects.value('departure_date', 'status', 'id', 'work_type')) + list(order_connects.value('departure_date', 'status', 'id', 'work_type'))
+        # departure_date 기준으로 정렬
+        combined_data = sorted(combined_data, key=lambda x: x["departure_date"])
+
+        # 다음 진행할 배차 찾기
+        next_connect = DispatchConnectService.get_current_connect(combined_data)
+        if next_connect:
+            if next_connect['work_type'] == "출근" or next_connect['work_type'] == "출근":
+                driver_check = DriverCheck.objects.get(regularly_id=next_connect['id'])
+            if next_connect['work_type'] == "일반":
+                driver_check = DriverCheck.objects.get(regularly_id=next_connect['id'])
+
+            # 다음 배차의 1시간, 20분 전 시간이 현재 배차의 운행시간과 겹치는 경우 has_issue 값을 False로 바꿔줌
+            # 겹치지 않는 경우, has_issue 기본값이 True라서 아래 조건 통과하고 운행 준비부터 순차적으로 진행
+            # 운행시작시간(1시간 전)에 문제가 없다면 운행일보 작성으로
+            if not driver_check.drive_time_has_issue:
+                next_connect.status = ConnectStatus.DRIVE_LOG_START
+                next_connect.save()
+            # 기상확인시간(1시간 30분 전)에 문제가 없다면 탑승 및 운행 시작으로
+            elif not driver_check.wake_time_has_issue:
+                next_connect.status = ConnectStatus.BOARDING
+                next_connect.save()
+        return 
+
 
 class ConnectCheckView(APIView):
     def post(self, request):
