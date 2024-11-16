@@ -128,6 +128,18 @@ class DispatchRegularlyConnectDetailSerializer(serializers.ModelSerializer):
 
         return DispatchRegularlyStationSerializer(filtered_stations, many=True).data
 
+# 문제 정기배차리스트
+class ProblemRegularlyConnectListSerializer(serializers.ModelSerializer):
+    work_type = serializers.ReadOnlyField(source="regularly_id.work_type")
+    bus_num = serializers.ReadOnlyField(source="bus_id.vehicle_num")
+    arrival = serializers.ReadOnlyField(source="regularly_id.arrival")
+    departure = serializers.ReadOnlyField(source="regularly_id.departure")
+    route = serializers.ReadOnlyField(source="regularly_id.route")
+    group = serializers.ReadOnlyField(source="regularly_id.group.name")
+
+    class Meta:
+        model = DispatchRegularlyConnect
+        fields = ['id', 'work_type', 'bus_num' ,'departure_date', 'arrival_date', 'departure', 'arrival', 'route', 'group']
 
 class DispatchOrderStationSerializer(serializers.ModelSerializer):
     waypoint = serializers.SerializerMethodField()
@@ -203,7 +215,23 @@ class DispatchOrderConnectDetailSerializer(serializers.ModelSerializer):
     def get_locations(self, obj):
         # 일반 배차의 경우 stations는 빈 리스트로 반환
         return None
-    
+
+# 문제 일반배차리스트
+class ProblemOrderConnectListSerializer(serializers.ModelSerializer):
+    arrival = serializers.ReadOnlyField(source="order_id.arrival")
+    bus_num = serializers.ReadOnlyField(source="bus_id.vehicle_num")
+    departure = serializers.ReadOnlyField(source="order_id.departure")
+    work_type = serializers.ReadOnlyField()
+    route = serializers.ReadOnlyField(source="order_id.route")
+    group = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DispatchOrderConnect
+        fields = ['id', 'work_type', 'bus_num','departure_date', 'arrival_date', 'departure', 'arrival', 'route', 'group']
+
+    def get_group(self, obj):
+        # 일반 배차에는 group이 없으므로 빈 문자열을 반환
+        return ""    
 
 class DispatchOrderConnectSerializer(serializers.ModelSerializer):
     waypoint = DispatchOrderStationSerializer(many=True, source="order_id.station")
