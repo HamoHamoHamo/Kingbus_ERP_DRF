@@ -157,7 +157,7 @@ class ProblemRegularlyStationSerializer(serializers.ModelSerializer):
     def get_arrival_time(self, obj):
         # 해당 정류장에 연결된 StationArrivalTime 가져오기
         arrival_time_entry = obj.station_arrival_time.first()  # station_arrival_time은 related_name
-        return arrival_time_entry.arrival_time if arrival_time_entry else None       
+        return arrival_time_entry.arrival_time if arrival_time_entry else ""       
 
 # 문제 정기배차상세
 class ProblemRegularlyConnectDetailSerializer(serializers.ModelSerializer):
