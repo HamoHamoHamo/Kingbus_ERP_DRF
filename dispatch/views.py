@@ -23,7 +23,8 @@ from .services import DispatchConnectService
 from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, \
     DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, DrivingHistorySerializer, \
     DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer, MorningChecklistSerializer, EveningChecklistSerializer, \
-    TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer, DispatchOrderTourCustomerSerializer, LocationHistoryRequestSerializer, LocationHistorySerializer, DriverCheckRequestSerializer, StationArrivalTimeSerializer, ConnectRequestSerializer, DailyDispatchOrderConnectListSerializer, DailyDispatchRegularlyConnectListSerializer, GetOffWorkDataSerialzier, GetOffWorkRequestSerializer, DispatchRegularlyConnectListSerializer, DispatchOrderConnectListSerializer, DispatchOrderConnectDetailSerializer, DispatchRegularlyConnectDetailSerializer
+    TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer, DispatchOrderTourCustomerSerializer, LocationHistoryRequestSerializer, LocationHistorySerializer, DriverCheckRequestSerializer, StationArrivalTimeSerializer, ConnectRequestSerializer, DailyDispatchOrderConnectListSerializer, DailyDispatchRegularlyConnectListSerializer, GetOffWorkDataSerialzier, GetOffWorkRequestSerializer, DispatchRegularlyConnectListSerializer, DispatchOrderConnectListSerializer, DispatchOrderConnectDetailSerializer, DispatchRegularlyConnectDetailSerializer, \
+    ProblemOrderConnectListSerializer, ProblemRegularlyConnectListSerializer
 from my_settings import SUNGHWATOUR_CRED_PATH, CRED_PATH
 from itertools import chain
 from operator import itemgetter
@@ -199,6 +200,49 @@ class DispatchDetailView(APIView):
                 'data': None,
                 'message': f'오류가 발생했습니다: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# 문제 있는 배차 리스트
+class ProblemListDispatches(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request, date):
+        # 관리자 권한 확인
+        if not request.user.role == "관리자" or request.user.use != "사용":
+            return Response({
+                'result': 'false',
+                'data': None,
+                'message': '권한이 없습니다.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        # 날짜 형식 검사
+        try:
+            datetime.strptime(date, "%Y-%m-%d")  # DATE_FORMAT이 "%Y-%m-%d" 형식이라고 가정
+        except ValueError:
+            return Response({
+                'result': 'false',
+                'data': None,
+                'message': {'error': 'Invalid date format'}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 문제 있는 정기 배차와 일반 배차 가져오기
+        regularly_dispatches = DispatchRegularlyConnect.objects.filter(departure_date__startswith=date, has_issue=True)
+        order_dispatches = DispatchOrderConnect.objects.filter(departure_date__startswith=date, has_issue=True)
+
+        # 데이터 직렬화
+        regularly_serialized = ProblemRegularlyConnectListSerializer(regularly_dispatches, many=True).data
+        order_serialized = ProblemOrderConnectListSerializer(order_dispatches, many=True).data
+
+        # 두 리스트를 하나로 합친 후 departure_date 기준으로 정렬
+        combined_dispatches = list(chain(regularly_serialized, order_serialized))
+        combined_dispatches.sort(key=itemgetter('departure_date'))  # departure_date로 정렬
+
+        response_data = {
+            'result': 'true',
+            'data': combined_dispatches,
+            'message': ''
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
 
 class LocationHistory(APIView):
     permission_classes = (IsAuthenticated,)
