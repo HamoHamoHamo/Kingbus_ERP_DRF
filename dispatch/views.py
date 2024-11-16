@@ -24,7 +24,7 @@ from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnec
     DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, DrivingHistorySerializer, \
     DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer, MorningChecklistSerializer, EveningChecklistSerializer, \
     TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer, DispatchOrderTourCustomerSerializer, LocationHistoryRequestSerializer, LocationHistorySerializer, DriverCheckRequestSerializer, StationArrivalTimeSerializer, ConnectRequestSerializer, DailyDispatchOrderConnectListSerializer, DailyDispatchRegularlyConnectListSerializer, GetOffWorkDataSerialzier, GetOffWorkRequestSerializer, DispatchRegularlyConnectListSerializer, DispatchOrderConnectListSerializer, DispatchOrderConnectDetailSerializer, DispatchRegularlyConnectDetailSerializer, \
-    ProblemOrderConnectListSerializer, ProblemRegularlyConnectListSerializer
+    ProblemOrderConnectListSerializer, ProblemRegularlyConnectListSerializer, ProblemOrderConnectDetailSerializer, ProblemRegularlyConnectDetailSerializer
 from my_settings import SUNGHWATOUR_CRED_PATH, CRED_PATH
 from itertools import chain
 from operator import itemgetter
@@ -243,6 +243,77 @@ class ProblemListDispatches(APIView):
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
+
+# 문제 배차 상세 조회
+class ProblemDispatchDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        
+        # 관리자 권한 확인
+        if not request.user.role == "관리자" or request.user.use != "사용":
+            return Response({
+                'result': 'false',
+                'data': None,
+                'message': '권한이 없습니다.'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # 쿼리 파라미터에서 'id'와 'work_type' 가져오기
+        dispatch_id = request.query_params.get('id')
+        work_type = request.query_params.get('work_type')
+
+        # 필수 파라미터가 없을 때 오류 처리
+        if not dispatch_id or not work_type:
+            return Response({
+                'result': 'false',
+                'data': None,
+                'message': 'id와 work_type 파라미터가 필요합니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # 배차 종류에 따라 모델 및 데이터를 가져옴
+            if work_type in ['출근', '퇴근']:
+                dispatch = get_object_or_404(DispatchRegularlyConnect, id=dispatch_id, has_issue=True)
+                serializer_class = ProblemRegularlyConnectDetailSerializer
+
+            elif work_type == '일반':
+                dispatch = get_object_or_404(DispatchOrderConnect, id=dispatch_id, has_issue=True)
+                serializer_class = ProblemOrderConnectDetailSerializer
+
+            else:
+                return Response({
+                    'result': 'false',
+                    'data': None,
+                    'message': '유효하지 않은 work_type입니다.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # 직렬화
+            serializer = serializer_class(dispatch)
+            response_data = serializer.data
+
+            # 성공 응답 반환
+            return Response({
+                'result': 'true',
+                'data': response_data,
+                'message': '성공적으로 데이터를 가져왔습니다.'
+            }, status=status.HTTP_200_OK)
+
+        except Http404:
+            # 배차가 없을 경우
+            return Response({
+                'result': 'false',
+                'data': None,
+                'message': '해당 배차를 찾을 수 없습니다.'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            # 기타 예외 처리
+            return Response({
+                'result': 'false',
+                'data': None,
+                'message': f'오류가 발생했습니다: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 
 class LocationHistory(APIView):
     permission_classes = (IsAuthenticated,)
