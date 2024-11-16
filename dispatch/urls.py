@@ -7,7 +7,8 @@ urlpatterns = [
     path('monthly/<str:month>', views.MonthlyDispatches.as_view()),
     path('daily/<str:date>', views.DailyDispatches.as_view()),
     path('daily/list/<str:date>', views.DailyListDispatches.as_view()), # 일일배차리스트
-    path('problem/list/<str:date>', views.ProblemListDispatches.as_view()), # 문제노선리스트
+    path('problem/list/<str:date>', views.ProblemListDispatches.as_view()), # 문제 배차리스트
+    path('problem/detail', views.ProblemDispatchDetailView.as_view()), #문제 배차상세
     path('daily/detail/location-history', views.LocationHistory.as_view()),
     path('daily/routine/get-off-work', views.DailyGetOffWorkView.as_view()),
     path('daily/routine/<str:date>', views.DailyRoutineView.as_view()),

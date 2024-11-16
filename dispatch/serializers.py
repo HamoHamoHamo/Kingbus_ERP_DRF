@@ -141,6 +141,57 @@ class ProblemRegularlyConnectListSerializer(serializers.ModelSerializer):
         model = DispatchRegularlyConnect
         fields = ['id', 'work_type', 'bus_num' ,'departure_date', 'arrival_date', 'departure', 'arrival', 'route', 'group']
 
+# 문제 정기배차 정류장
+class ProblemRegularlyStationSerializer(serializers.ModelSerializer):
+    station_name = serializers.ReadOnlyField(source="station.name")  # 정류장 이름
+    station_type = serializers.ReadOnlyField()  # 정류장 종류
+    latitude = serializers.ReadOnlyField(source="station.latitude")  # 위도
+    longitude = serializers.ReadOnlyField(source="station.longitude")  # 경도
+    target_time = serializers.ReadOnlyField(source="time")  # DispatchRegularlyDataStation의 time을 target_time으로 사용
+    arrival_time = serializers.SerializerMethodField()  # 도착 시간을 SerializerMethodField로 변경
+
+    class Meta:
+        model = DispatchRegularlyStation  # DispatchRegularlyStation에서 정보를 가져옴
+        fields = ['id', 'station_name', 'station_type', 'latitude', 'longitude', 'target_time', 'arrival_time']
+
+    def get_arrival_time(self, obj):
+        # 해당 정류장에 연결된 StationArrivalTime 가져오기
+        arrival_time_entry = obj.station_arrival_time.first()  # station_arrival_time은 related_name
+        return arrival_time_entry.arrival_time if arrival_time_entry else None       
+
+# 문제 정기배차상세
+class ProblemRegularlyConnectDetailSerializer(serializers.ModelSerializer):
+    driver_name = serializers.ReadOnlyField(source="driver_id.name")  # 기사 이름
+    driver_phone = serializers.ReadOnlyField(source="driver_id.phone_num")  # 기사 전화번호
+    bus_num = serializers.ReadOnlyField(source="bus_id.vehicle_num")  # 버스 번호
+    group = serializers.ReadOnlyField(source="regularly_id.group.name")  # 그룹명
+    route = serializers.ReadOnlyField(source="regularly_id.route")  # 노선명
+    departure = serializers.ReadOnlyField(source="regularly_id.departure")  # 출발지
+    arrival = serializers.ReadOnlyField(source="regularly_id.arrival")  # 도착지
+    problem = serializers.ReadOnlyField(source="status")  # 문제 상태
+    stations = serializers.SerializerMethodField()  # 정류장 리스트
+
+    class Meta:
+        model = DispatchRegularlyConnect  # 정기 배차 모델
+        fields = [
+            'driver_name', 'driver_phone', 'bus_num', 'group', 'route',
+            'departure', 'arrival', 'departure_date', 'arrival_date',
+            'problem', 'stations'
+        ]
+    
+    def get_stations(self, obj):
+        # obj의 work_type에 따라 정류장을 필터링
+        work_type = obj.work_type  # DispatchRegularlyConnect 인스턴스의 work_type
+
+        if work_type == '출근':
+            filtered_stations = obj.regularly_id.regularly_station.filter(station_type__in=['정류장', '사업장'])
+        elif work_type == '퇴근':
+            filtered_stations = obj.regularly_id.regularly_station.filter(station_type__in=['사업장', '정류장', '마지막 정류장'])
+        else:
+            filtered_stations = obj.regularly_id.regularly_station.all()  # 기본값은 전체 정류장
+
+        return DispatchRegularlyStationSerializer(filtered_stations, many=True).data
+    
 class DispatchOrderStationSerializer(serializers.ModelSerializer):
     waypoint = serializers.SerializerMethodField()
 
@@ -231,8 +282,35 @@ class ProblemOrderConnectListSerializer(serializers.ModelSerializer):
 
     def get_group(self, obj):
         # 일반 배차에는 group이 없으므로 빈 문자열을 반환
-        return ""    
+        return ""   
 
+# 문제 일반배차상세 
+class ProblemOrderConnectDetailSerializer(serializers.ModelSerializer):
+    driver_name = serializers.ReadOnlyField(source="driver_id.name")  # 기사 이름
+    driver_phone = serializers.ReadOnlyField(source="driver_id.phone_num")  # 기사 전화번호
+    bus_num = serializers.ReadOnlyField(source="bus_id.vehicle_num")  # 버스 번호
+    route = serializers.ReadOnlyField(source="order_id.route")  # 노선명
+    departure = serializers.ReadOnlyField(source="order_id.departure")  # 출발지
+    arrival = serializers.ReadOnlyField(source="order_id.arrival")  # 도착지
+    problem = serializers.ReadOnlyField(source="status")  # 문제 상태
+    stations = serializers.SerializerMethodField()  # 정류장 리스트
+    group = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DispatchOrderConnect
+        fields = [
+            'driver_name', 'driver_phone', 'bus_num', 'route', 'departure',
+            'arrival', 'departure_date', 'arrival_date', 'problem', 'stations', 'group'
+        ]
+
+    def get_stations(self, obj):
+        # 일반 배차에서는 정류장 리스트를 빈 리스트로 반환
+        return None
+    
+    def get_group(self, obj):
+        # 일반 배차에는 group이 없으므로 빈 문자열을 반환
+        return ""   
+    
 class DispatchOrderConnectSerializer(serializers.ModelSerializer):
     waypoint = DispatchOrderStationSerializer(many=True, source="order_id.station")
     # waypoint = serializers.ReadOnlyField(source="order_id__waypoint")
