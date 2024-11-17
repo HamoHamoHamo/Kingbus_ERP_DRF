@@ -688,12 +688,12 @@ class StationCheckView(APIView):
         if station_arrival_time.regularly_connect_id.status != ConnectStatus.DRIVING:
             return StandardResponse.get_response(False, "2", {"error": "운행중이 아닙니다"}, status.HTTP_400_BAD_REQUEST)
 
+        data = serializer.data
         # 마지막 정류장이면 Connect의 status 운행 중에서 운행 일보 작성으로 변경
         if request.data['is_last_station'] == "true":
             connect = station_arrival_time.regularly_connect_id
             connect.status = ConnectStatus.get_next_status(ConnectStatus.DRIVING)
             connect.save()
-            data = serializer.data
             data['current_status'] = connect.status
 
         return StandardResponse.get_response(True, data, "", status.HTTP_200_OK)
