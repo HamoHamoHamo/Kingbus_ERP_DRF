@@ -206,6 +206,13 @@ class ProblemListDispatches(APIView):
     permission_classes = (IsAuthenticated,)
 
     def get(self, request, date):
+        # 관리자와 팀장 권한 확인
+        if request.user.role not in ["관리자", "팀장"] :
+            return Response({
+                'result': 'false',
+                'data': None,
+                'message': '권한이 없습니다.'
+            }, status=status.HTTP_403_FORBIDDEN)
 
         # 날짜 형식 검사
         try:
@@ -242,6 +249,14 @@ class ProblemDispatchDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        
+        # 관리자와 팀장 권한 확인
+        if request.user.role not in ["관리자", "팀장"] :
+            return Response({
+                'result': 'false',
+                'data': None,
+                'message': '권한이 없습니다.'
+            }, status=status.HTTP_403_FORBIDDEN)
         
         # 쿼리 파라미터에서 'id'와 'work_type' 가져오기
         dispatch_id = request.query_params.get('id')
