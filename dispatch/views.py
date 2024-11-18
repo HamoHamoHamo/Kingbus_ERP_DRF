@@ -18,6 +18,7 @@ from trp_drf.settings import DATE_FORMAT, TODAY, BASE_DIR
 from firebase.firebase_file import upload_files
 from trp_drf.pagination import Pagination
 from humanresource.models import Member
+from vehicle.models import DailyChecklist
 from .models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrder, DispatchOrderStation, DispatchOrderTour, DispatchOrderTourCustomer, ConnectStatusFieldMapping, ConnectStatus, StationArrivalTime
 from .services import DispatchConnectService
 from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, \
@@ -523,6 +524,8 @@ class DriverCheckView(APIView):
             return Response(e_response, status=status.HTTP_400_BAD_REQUEST)
 
 class DriverCheckView2(APIView):
+    STATUS_MORNING_CHECKLIST = "아침 점호 및 일일 점검"
+
     def post(self, request):
         request_serializer = DriverCheckRequestSerializer(data=request.data)
         if not request_serializer.is_valid():
@@ -550,6 +553,20 @@ class DriverCheckView2(APIView):
             # type값에 따라 connect의 다음 status로 변경
             connect.status = ConnectStatus.get_next_status(time_type)
             connect.save()
+
+            # 운행준비일떄 MorningChecklist, DailyChecklist 제출 안 했으면 status "아침 점호 및 일일 점검" 으로 변경
+            if time_type == ConnectStatus.PREPARE:
+                try:
+                    date = connect.departure_date[:10]
+                    done_morning_checklist = MorningChecklist.objects.get(member=request.user, date=date).submit_check
+                    done_daily_checklist = DailyChecklist.objects.get(member=request.user, date=date).submit_check
+                    
+                    # 아침점호 또는 일일점검 안 했으면 현재 status "아침 점호 및 일일 점검" 으로 변경
+                    if not done_morning_checklist or not done_daily_checklist:
+                        connect.status = self.STATUS_MORNING_CHECKLIST
+                        connect.save()
+                except:
+                    pass
 
             # 운행종료일때 다음 배차의 has_issue 확인하여 status 다음 배차 status 변경 
             if time_type == ConnectStatus.END:

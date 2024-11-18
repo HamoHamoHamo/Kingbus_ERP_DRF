@@ -11,6 +11,8 @@ from trp_drf.settings import DATE_FORMAT
 from .serializers import RefuelingSerializer, DailyChecklistSerializer, WeeklyChecklistSerializer, EquipmentChecklistSerializer
 from .models import Vehicle, DailyChecklist, WeeklyChecklist, EquipmentChecklist
 from crudmember.models import Category
+from dispatch.models import ConnectStatus
+from dispatch.services import DispatchConnectService
 from humanresource.models import Member
 
 
@@ -127,6 +129,7 @@ class DailyChecklistView(APIView):
                 'data': serializer.data,
                 'message': ''
             }
+            self.set_status(date, request.user)
             return Response(response, status=status.HTTP_200_OK)
         response = {
             'result': 'false',
@@ -136,6 +139,26 @@ class DailyChecklistView(APIView):
             }
         }
         return Response(response, status=status.HTTP_400_BAD_REQUEST)
+    
+    # 현재 배차 status 변경
+    def set_status(self, date, user):
+        regularly_connects, order_connects = DispatchConnectService.get_daily_connect_list(date, user)
+        # 두 데이터 리스트 합치기
+        combined_data = list(regularly_connects.values('departure_date', 'id', 'status', 'work_type')) + list(order_connects.values('departure_date', 'id', 'status', 'work_type'))
+        # departure_date 기준으로 정렬
+        combined_data = sorted(combined_data, key=lambda x: x["departure_date"])
+
+        # 진행할 배차 찾기
+        current_connect_data = DispatchConnectService.get_current_connect(combined_data)
+        
+        if current_connect_data['work_type'] == '일반':
+            connect = order_connects.get(id=current_connect_data['id'])
+        else:
+            connect = regularly_connects.get(id=current_connect_data['id'])
+        connect.status = ConnectStatus.BOARDING
+        connect.save()
+
+        return
 
 class WeeklyChecklistView(APIView):
     def get(self, request, date):
