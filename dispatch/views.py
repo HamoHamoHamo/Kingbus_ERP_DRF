@@ -12,22 +12,30 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from common.response import set_response_false, set_response_true
+from common.constant import DATE_TIME_FORMAT
+from common.response import set_response_false, set_response_true, StandardResponse
 from trp_drf.settings import DATE_FORMAT, TODAY, BASE_DIR
 from firebase.firebase_file import upload_files
 from trp_drf.pagination import Pagination
 from humanresource.models import Member
-from dispatch.models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrder, DispatchOrderStation, DispatchOrderTour, DispatchOrderTourCustomer
+from vehicle.models import DailyChecklist
+from .models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrder, DispatchOrderStation, DispatchOrderTour, DispatchOrderTourCustomer, ConnectStatusFieldMapping, ConnectStatus, StationArrivalTime
+from .services import DispatchConnectService
 from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, \
     DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, DrivingHistorySerializer, \
     DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer, MorningChecklistSerializer, EveningChecklistSerializer, \
-    TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer, DispatchOrderTourCustomerSerializer
+    TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer, DispatchOrderTourCustomerSerializer, LocationHistoryRequestSerializer, LocationHistorySerializer, DriverCheckRequestSerializer, StationArrivalTimeSerializer, ConnectRequestSerializer, DailyDispatchOrderConnectListSerializer, DailyDispatchRegularlyConnectListSerializer, GetOffWorkDataSerialzier, GetOffWorkRequestSerializer, DispatchRegularlyConnectListSerializer, DispatchOrderConnectListSerializer, DispatchOrderConnectDetailSerializer, DispatchRegularlyConnectDetailSerializer, \
+    ProblemOrderConnectListSerializer, ProblemRegularlyConnectListSerializer, ProblemOrderConnectDetailSerializer, ProblemRegularlyConnectDetailSerializer
 from my_settings import SUNGHWATOUR_CRED_PATH, CRED_PATH
+from itertools import chain
+from operator import itemgetter
 
 from firebase.fcm_message import send_message
 from firebase_admin import firestore
 from firebase.rpa_p_firebase import RpaPFirebase
 
+from .twilio import generate_verification_code, send_verification_code
+from django.core.cache import cache  # Django 캐시 사용
 
 def get_invalid_date_format_response():
     response = {
@@ -96,6 +104,395 @@ class DailyDispatches(APIView):
         }
         return Response(response, status=status.HTTP_200_OK)
 
+# 일일 배차 리스트
+class DailyListDispatches(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request, date):
+        # 날짜 형식 검사
+        try:
+            datetime.strptime(date, "%Y-%m-%d")  # DATE_FORMAT이 "%Y-%m-%d" 형식이라고 가정
+        except ValueError:
+            return Response({
+                'result': 'false',
+                'data': '1',
+                'message': {'error': 'Invalid date format'}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 사용자 및 날짜 조건으로 정기 배차와 주문 배차 데이터 가져오기
+        user = request.user
+        regularly_dispatches = DispatchRegularlyConnect.objects.filter(departure_date__startswith=date, driver_id=user)
+        order_dispatches = DispatchOrderConnect.objects.filter(departure_date__startswith=date, driver_id=user)
+
+        # 데이터 직렬화
+        regularly_serialized = DispatchRegularlyConnectListSerializer(regularly_dispatches, many=True).data
+        order_serialized = DispatchOrderConnectListSerializer(order_dispatches, many=True).data
+
+        # 두 리스트를 하나로 합친 후 departure_date(또는 departure_time) 기준으로 정렬
+        combined_dispatches = list(chain(regularly_serialized, order_serialized))
+        combined_dispatches.sort(key=itemgetter('departure_date'))  # departure_date로 정렬
+
+        response_data = {
+            'result': 'true',
+            'data': combined_dispatches,
+            'message': ''
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
+# 일일 배차 상세 조회
+class DispatchDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        
+        # 쿼리 파라미터에서 'id'와 'work_type' 가져오기
+        dispatch_id = request.query_params.get('id')
+        work_type = request.query_params.get('work_type')
+
+        # 필수 파라미터가 없을 때 오류 처리
+        if not dispatch_id or not work_type:
+            return Response({
+                'result': 'false',
+                'data': 0,
+                'message': 'id와 work_type 파라미터가 필요합니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # work_type에 따라 다른 모델과 시리얼라이저를 선택
+        try:
+            if work_type == '출근':
+                dispatch = get_object_or_404(DispatchRegularlyConnect, id=dispatch_id, work_type=work_type, driver_id=request.user)
+                serializer_class = DispatchRegularlyConnectDetailSerializer
+            elif work_type == '퇴근':
+                dispatch = get_object_or_404(DispatchRegularlyConnect, id=dispatch_id, work_type=work_type, driver_id=request.user)
+                serializer_class = DispatchRegularlyConnectDetailSerializer                
+            elif work_type == '일반':
+                dispatch = get_object_or_404(DispatchOrderConnect, id=dispatch_id, work_type=work_type, driver_id=request.user)
+                serializer_class = DispatchOrderConnectDetailSerializer
+            else:
+                return Response({
+                    'result': 'false',
+                    'data': None,
+                    'message': '유효하지 않은 work_type입니다.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 선택한 시리얼라이저로 직렬화
+            serializer = serializer_class(dispatch, context={'work_type': work_type})
+            
+            # 성공 응답 구성
+            return Response({
+                'result': 'true',
+                'data': serializer.data,
+                'message': '성공적으로 데이터를 가져왔습니다.'
+            }, status=status.HTTP_200_OK)
+        
+        except Http404:
+            # get_object_or_404에서 발생하는 Http404 예외 처리
+            return Response({
+                'result': 'false',
+                'data': None,
+                'message': 'No matching DispatchOrderConnect or DispatchRegularlyConnect found for the given query.'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            # 기타 예상치 못한 오류 처리
+            return Response({
+                'result': 'false',
+                'data': None,
+                'message': f'오류가 발생했습니다: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# 문제 있는 배차 리스트
+class ProblemListDispatches(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request, date):
+        # 관리자와 팀장 권한 확인
+        if request.user.role not in ["관리자", "팀장"] :
+            return Response({
+                'result': 'false',
+                'data': None,
+                'message': '권한이 없습니다.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        # 날짜 형식 검사
+        try:
+            datetime.strptime(date, "%Y-%m-%d")  # DATE_FORMAT이 "%Y-%m-%d" 형식이라고 가정
+        except ValueError:
+            return Response({
+                'result': 'false',
+                'data': None,
+                'message': {'error': 'Invalid date format'}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 문제 있는 정기 배차와 일반 배차 가져오기
+        regularly_dispatches = DispatchRegularlyConnect.objects.filter(departure_date__startswith=date, has_issue=True)
+        order_dispatches = DispatchOrderConnect.objects.filter(departure_date__startswith=date, has_issue=True)
+
+        # 데이터 직렬화
+        regularly_serialized = ProblemRegularlyConnectListSerializer(regularly_dispatches, many=True).data
+        order_serialized = ProblemOrderConnectListSerializer(order_dispatches, many=True).data
+
+        # 두 리스트를 하나로 합친 후 departure_date 기준으로 정렬
+        combined_dispatches = list(chain(regularly_serialized, order_serialized))
+        combined_dispatches.sort(key=itemgetter('departure_date'))  # departure_date로 정렬
+
+        response_data = {
+            'result': 'true',
+            'data': combined_dispatches,
+            'message': ''
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
+# 문제 배차 상세 조회
+class ProblemDispatchDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        
+        # 관리자와 팀장 권한 확인
+        if request.user.role not in ["관리자", "팀장"] :
+            return Response({
+                'result': 'false',
+                'data': None,
+                'message': '권한이 없습니다.'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # 쿼리 파라미터에서 'id'와 'work_type' 가져오기
+        dispatch_id = request.query_params.get('id')
+        work_type = request.query_params.get('work_type')
+
+        # 필수 파라미터가 없을 때 오류 처리
+        if not dispatch_id or not work_type:
+            return Response({
+                'result': 'false',
+                'data': None,
+                'message': 'id와 work_type 파라미터가 필요합니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # 배차 종류에 따라 모델 및 데이터를 가져옴
+            if work_type in ['출근', '퇴근']:
+                dispatch = get_object_or_404(DispatchRegularlyConnect, id=dispatch_id, has_issue=True)
+                serializer_class = ProblemRegularlyConnectDetailSerializer
+
+            elif work_type == '일반':
+                dispatch = get_object_or_404(DispatchOrderConnect, id=dispatch_id, has_issue=True)
+                serializer_class = ProblemOrderConnectDetailSerializer
+
+            else:
+                return Response({
+                    'result': 'false',
+                    'data': None,
+                    'message': '유효하지 않은 work_type입니다.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # 직렬화
+            serializer = serializer_class(dispatch)
+            response_data = serializer.data
+
+            # 성공 응답 반환
+            return Response({
+                'result': 'true',
+                'data': response_data,
+                'message': '성공적으로 데이터를 가져왔습니다.'
+            }, status=status.HTTP_200_OK)
+
+        except Http404:
+            # 배차가 없을 경우
+            return Response({
+                'result': 'false',
+                'data': None,
+                'message': '해당 배차를 찾을 수 없습니다.'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            # 기타 예외 처리
+            return Response({
+                'result': 'false',
+                'data': None,
+                'message': f'오류가 발생했습니다: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+class LocationHistory(APIView):
+    permission_classes = (IsAuthenticated,)
+    def get(self, request):
+        request_serializer = LocationHistoryRequestSerializer(data=request.GET)
+        # id가 숫자가 아님
+        if not request_serializer.is_valid():
+            return StandardResponse.get_response(False, '1', request_serializer.errors, status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            connect_id = request_serializer.validated_data['id']
+            connect = DispatchRegularlyConnect.objects.get(id=connect_id)
+            response_serializer = LocationHistorySerializer(connect)
+            return StandardResponse.get_response(True, response_serializer.data, "", status.HTTP_200_OK)
+
+
+        # 올바르지 않은 id
+        except DispatchRegularlyConnect.DoesNotExist:
+            error_message = {'id': "Invalid Id"}
+            return StandardResponse.get_response(False, '2', error_message, status.HTTP_404_NOT_FOUND)
+    
+        except Exception as e:
+            return StandardResponse.get_response(False, '3', {'error': f"{e}"}, status.HTTP_400_BAD_REQUEST)
+            
+
+    def post(self, request):
+        try:
+            connect = DispatchRegularlyConnect.objects.get(
+                id=request.data.get('id')
+            )
+            
+            serializer = LocationHistorySerializer(
+                connect,
+                data=request.data,
+                partial=True  # 부분 업데이트 허용
+            )
+            
+            if serializer.is_valid():
+                serializer.save()
+                return StandardResponse.get_response(True, serializer.data, "", status.HTTP_200_OK)
+            
+            return StandardResponse.get_response(False, "1", {"error": f"{serializer.errors}"}, status.HTTP_400_BAD_REQUEST)
+        
+        # 올바르지 않은 id
+        except DispatchRegularlyConnect.DoesNotExist:
+            return StandardResponse.get_response(False, '2', {"id": "Invalid Id"}, status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return StandardResponse.get_response(False, '3', {'error': f"{e}"}, status.HTTP_400_BAD_REQUEST)
+
+class DailyGetOffWorkView(APIView):
+    serializer_class = GetOffWorkRequestSerializer
+    
+    def post(self, request):
+        serializer = self.serializer_class(data=request.data)
+        if not serializer.is_valid():
+            return StandardResponse.get_response(False, '1', {"error": str(serializer.errors)}, status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            checklist = EveningChecklist.objects.get(date=serializer.data['date'], member=request.user)
+            # 배차 확인
+            if serializer.data['status_type'] == EveningChecklist.STATUS_TYPE_CHOCIES[0]:
+                checklist.tomorrow_check_submit_time = str(datetime.now())[11:16]
+            # 퇴근
+            elif serializer.data['status_type'] == EveningChecklist.STATUS_TYPE_CHOCIES[1]:
+                checklist.get_off_submit_time = str(datetime.now())[11:16]
+            checklist.save()
+            data = EveningChecklistSerializer(checklist).data
+
+            return StandardResponse.get_response(True, data, "", status.HTTP_200_OK)
+        
+
+        except EveningChecklist.DoesNotExist:
+            return StandardResponse.get_response(False, '2', {"error": "EveningChecklist DoesNotExist"}, status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return StandardResponse.get_response(False, '3', {"error": str(e)}, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+
+class DailyRoutineView(APIView):
+    roll_call_time = "저녁 점호"
+    tomorrow_dispatch_check_time = "배차 확인"
+    get_off_time = "퇴근"
+    def get(self, request, date):
+        try:
+            datetime.strptime(date, DATE_FORMAT)
+        except ValueError:
+            return StandardResponse.get_response(False, "1", {"error": "Invalid date format"}, status.HTTP_400_BAD_REQUEST)
+
+        user = request.user
+
+        tasks = self.get_connect_list(date, user)
+        
+        go_to_work = self.get_go_to_work_data(tasks)
+        get_off_work = self.get_get_off_work_data(date, user)
+        info = self.get_current_task(tasks)
+        
+        # 운행할 배차가 없을 때 저녁점호 데이터 확인해서 status 결정
+        status_data = info['status']
+        if not status_data and tasks:
+            if not get_off_work['roll_call_time']:
+                status_data = self.roll_call_time
+            elif not get_off_work['tomorrow_dispatch_check_time']:
+                status_data = self.tomorrow_dispatch_check_time
+            elif not get_off_work['get_off_time']:
+                status_data = self.get_off_time
+
+        data = {
+            "status": status_data,
+            "info": info,
+            "go_to_work": go_to_work,
+            "tasks": tasks,
+            "get_off_work": get_off_work,
+        }
+        return StandardResponse.get_response(True, data, "", status.HTTP_200_OK)
+
+    # 배차 데이터 불러오기
+    def get_connect_list(self, date, user):
+        regularly_connects, order_connects = DispatchConnectService.get_daily_connect_list(date, user)
+
+        # 데이터 직렬화
+        regularly_serialized = DailyDispatchRegularlyConnectListSerializer(regularly_connects, many=True).data
+        order_serialized = DailyDispatchOrderConnectListSerializer(order_connects, many=True).data
+
+        # 두 데이터 리스트 합치기
+        combined_data = regularly_serialized + order_serialized
+
+        # departure_date 기준으로 정렬
+        combined_data = sorted(combined_data, key=lambda x: x["departure_date"])
+        return combined_data
+    
+    def get_current_task(self, tasks):
+        current_connect = DispatchConnectService.get_current_connect(tasks)
+        if current_connect:
+            return {
+                "work_type": current_connect['work_type'],
+                "dispatch_id": current_connect['dispatch_id'],
+                "departure_time": current_connect['departure_date'][11:16],
+                "bus_id": current_connect['bus_id'],
+                "bus_num": current_connect['bus_num'],
+                "departure": current_connect['departure'],
+                "status": current_connect['status'],
+            }
+        # 조건에 맞는 배차가 없는 경우
+        return {
+            "dispatch_id": None,
+            "departure_time": "",
+            "bus_id": None,
+            "bus_num": "",
+            "departure": "",
+            "status": "",
+        }
+
+    # 출근 데이터 불러오기
+    def get_go_to_work_data(self, tasks):
+        if tasks:
+            first = tasks[0]
+            first_connect = DriverCheck.get_instance(first['dispatch_id'], first['work_type'])
+        
+            return {
+                "wake_time": first_connect.wake_time,
+                "attendance_time": first_connect.drive_time,
+            }
+        else:
+            return {
+                "wake_time": "",
+                "attendance_time": ""
+            }
+    
+    # 퇴근 데이터 불러오기
+    def get_get_off_work_data(self, date, user):
+        try:
+            evening_checklist = EveningChecklist.objects.get(date=date, member=user)
+        except EveningChecklist.DoesNotExist:
+            evening_checklist = EveningChecklist.create_new(date, user)
+        return GetOffWorkDataSerialzier(evening_checklist).data
+    
+
 class DriverCheckView(APIView):
     def patch(self, request):
         regularly_id = request.data['regularly_id']
@@ -157,6 +554,104 @@ class DriverCheckView(APIView):
             e_response['data'] = '1'
             e_response['message'] = serializer.errors
             return Response(e_response, status=status.HTTP_400_BAD_REQUEST)
+
+class DriverCheckView2(APIView):
+    STATUS_MORNING_CHECKLIST = "아침 점호 및 일일 점검"
+
+    def post(self, request):
+        request_serializer = DriverCheckRequestSerializer(data=request.data)
+        if not request_serializer.is_valid():
+            return StandardResponse.get_response(False, "1", request_serializer.errors, status.HTTP_400_BAD_REQUEST)
+
+        try:
+            connect_id = request_serializer.validated_data['id']
+            work_type = request_serializer.validated_data['work_type']
+
+            if work_type == '출근' or work_type == '퇴근':
+                driver_check = DriverCheck.objects.get(regularly_id=connect_id)
+                connect = driver_check.regularly_id
+            elif work_type == '일반':
+                driver_check = DriverCheck.objects.get(order_id=connect_id)
+                connect = driver_check.order_id
+            else:
+                return StandardResponse.get_response(False, "1", {"error": "work_type error"}, status.HTTP_400_BAD_REQUEST)
+            # type에 따라 시간 저장
+            time = request_serializer.validated_data['time']
+            time_type = request_serializer.validated_data['type']
+
+            # enum 활용해서 시간값 저장
+            setattr(driver_check, ConnectStatusFieldMapping.DRIVER_CHECK_STATUS_FIELD_MAP[time_type], time)
+            driver_check.save()
+            # type값에 따라 connect의 다음 status로 변경
+            connect.status = ConnectStatus.get_next_status(time_type)
+            connect.save()
+
+            # 운행준비일떄 MorningChecklist, DailyChecklist 제출 안 했으면 status "아침 점호 및 일일 점검" 으로 변경
+            if time_type == ConnectStatus.PREPARE:
+                try:
+                    date = connect.departure_date[:10]
+                    done_morning_checklist = MorningChecklist.objects.get(member=request.user, date=date).submit_check
+                    done_daily_checklist = DailyChecklist.objects.get(member=request.user, date=date).submit_check
+                    
+                    # 아침점호 또는 일일점검 안 했으면 현재 status "아침 점호 및 일일 점검" 으로 변경
+                    if not done_morning_checklist or not done_daily_checklist:
+                        connect.status = self.STATUS_MORNING_CHECKLIST
+                        connect.save()
+                except:
+                    pass
+
+            # 운행종료일때 다음 배차의 has_issue 확인하여 status 다음 배차 status 변경 
+            if time_type == ConnectStatus.END:
+                self.set_next_status(connect, request.user)
+
+            data = DriverCheckSerializer(driver_check).data
+            data['current_status'] = connect.status
+            return StandardResponse.get_response(True, data, "", status.HTTP_200_OK)
+
+
+        # 올바르지 않은 id
+        except DispatchRegularlyConnect.DoesNotExist:
+            error_message = {'id': "Invalid Id"}
+            return StandardResponse.get_response(False, '2', error_message, status.HTTP_404_NOT_FOUND)
+        # 올바르지 않은 id
+        except DispatchOrderConnect.DoesNotExist:
+            error_message = {'id': "Invalid Id"}
+            return StandardResponse.get_response(False, '2', error_message, status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return StandardResponse.get_response(False, '3', {'error': f"{e}"}, status.HTTP_400_BAD_REQUEST)
+
+    def set_next_status(self, connect, user):
+        date = connect.departure_date[:10]
+        regularly_connects, order_connects = DispatchConnectService.get_daily_connect_list(date, user)
+        
+        # 두 데이터 리스트 합치기
+        combined_data = list(regularly_connects.values('departure_date', 'status', 'id', 'work_type')) + list(order_connects.values('departure_date', 'status', 'id', 'work_type'))
+        # departure_date 기준으로 정렬
+        combined_data = sorted(combined_data, key=lambda x: x["departure_date"])
+
+        # 다음 진행할 배차 찾기
+        next_connect = DispatchConnectService.get_current_connect(combined_data)
+        if next_connect:
+            if next_connect['work_type'] == "출근" or next_connect['work_type'] == "퇴근":
+                driver_check = DriverCheck.objects.get(regularly_id=next_connect['id'])
+                connect = DispatchRegularlyConnect.objects.get(id=next_connect['id'])
+            # 일반
+            else:
+                driver_check = DriverCheck.objects.get(regularly_id=next_connect['id'])
+                connect = DispatchOrderConnect.objects.get(id=next_connect['id'])
+
+            # 다음 배차의 1시간, 20분 전 시간이 현재 배차의 운행시간과 겹치는 경우 has_issue 값을 False로 바꿔줌
+            # 겹치지 않는 경우, has_issue 기본값이 True라서 아래 조건 통과하고 운행 준비부터 순차적으로 진행
+            # 운행시작시간(1시간 전)에 문제가 없다면 운행일보 작성으로
+            if not driver_check.drive_time_has_issue:
+                connect.status = ConnectStatus.DRIVE_LOG_START
+                connect.save()
+            # 기상확인시간(1시간 30분 전)에 문제가 없다면 탑승 및 운행 시작으로
+            elif not driver_check.wake_time_has_issue:
+                connect.status = ConnectStatus.BOARDING
+                connect.save()
+        return 
+
 
 class ConnectCheckView(APIView):
     def post(self, request):
@@ -227,7 +722,31 @@ class ConnectCheckView(APIView):
             return Response(response, status=status.HTTP_201_CREATED)
         else:
             return Response({"message": "Request Body Error."}, status=status.HTTP_409_CONFLICT)
-    
+
+class StationCheckView(APIView):
+    def post(self, request):
+        serializer = StationArrivalTimeSerializer(data=request.data)
+        if serializer.is_valid():
+            station_arrival_time = serializer.save()
+            station_arrival_time.creator = request.user
+            station_arrival_time.save()
+        else:
+            return StandardResponse.get_response(False, "1", serializer.errors, status.HTTP_400_BAD_REQUEST)
+        
+        # 운행 중이 아닐때 last='ture'이면 에러
+        if station_arrival_time.regularly_connect_id.status != ConnectStatus.DRIVING:
+            return StandardResponse.get_response(False, "2", {"error": "운행중이 아닙니다"}, status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.data
+        # 마지막 정류장이면 Connect의 status 운행 중에서 운행 일보 작성으로 변경
+        if request.data['is_last_station'] == "true":
+            connect = station_arrival_time.regularly_connect_id
+            connect.status = ConnectStatus.get_next_status(ConnectStatus.DRIVING)
+            connect.save()
+            data['current_status'] = connect.status
+
+        return StandardResponse.get_response(True, data, "", status.HTTP_200_OK)
+        
 class RegularlyList(ListAPIView):
     serializer_class = DispatchRegularlyDataSerializer
     pagination_class = Pagination
@@ -407,14 +926,7 @@ class MorningChecklistView(APIView):
             datetime.strptime(date, DATE_FORMAT)
             datetime.strptime(request.data['arrival_time'], "%H:%M")
         except Exception as e:
-            response = {
-                'result': 'false',
-                'data': '1',
-                'message': {
-                    'error' : 'invalid date format'
-                },
-            }
-            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+            return StandardResponse.get_response(False, '1', {'error' : 'invalid date format'}, status.HTTP_400_BAD_REQUEST)
         
         try:
             checklist = MorningChecklist.objects.filter(date=date).get(member=request.user)    
@@ -425,13 +937,13 @@ class MorningChecklistView(APIView):
         if serializer.is_valid():
             instance = serializer.save()
             instance.submit_check = True
+            instance.submit_time = str(datetime.now())[11:16]
             instance.save()
-            response = {
-                'result': 'true',
-                'data': serializer.data,
-                'message': ''
-            }
-            return Response(response, status=status.HTTP_200_OK)
+
+            # 오늘 배차 모두 확인해서 도착시간과 다음 배차의 1시간 전, 20분 전 중복되는 부분 찾아서 has_issue 값 변경
+            self.check_daily_connects(date, request.user)
+
+            return StandardResponse.get_response(True, serializer.data, "", status.HTTP_200_OK)
         response = {
             'result': 'false',
             'data': '2',
@@ -440,7 +952,37 @@ class MorningChecklistView(APIView):
             }
         }
         return Response(response, status=status.HTTP_400_BAD_REQUEST)
+    
+    def check_daily_connects(self, date, user):
+        regularly_connects, order_connects = DispatchConnectService.get_daily_connect_list(date, user)
+        combined_data = list(regularly_connects.values('departure_date', 'arrival_date', 'id', 'work_type')) + list(order_connects.values('departure_date', 'arrival_date', 'id', 'work_type'))
+        # departure_date 기준으로 정렬
+        combined_data = sorted(combined_data, key=lambda x: x["departure_date"])
 
+        # combined_data 순회하며 조건 확인
+        for i in range(len(combined_data) - 1):  # 마지막 요소는 다음 배차가 없으므로 제외
+            current_data = combined_data[i]
+            next_data = combined_data[i + 1]
+            
+            current_arrival_date = datetime.strptime(current_data["arrival_date"], DATE_TIME_FORMAT)
+            next_departure_date = datetime.strptime(next_data["departure_date"], DATE_TIME_FORMAT)
+
+            # 다음 배차의 departure_date - 1시간 < 현재 배차의 arrival_date 조건
+            if next_departure_date - timedelta(hours=1) <= current_arrival_date:
+                if next_data['work_type'] == '출근' or next_data['work_type'] == '퇴근':
+                    driver_check = DriverCheck.objects.get(regularly_id=next_data['id'])
+                elif next_data['work_type'] == '일반':
+                    driver_check = DriverCheck.objects.get(order_id=next_data['id'])
+                driver_check.wake_time_has_issue = False
+                print("")
+                driver_check.save()
+
+            # 다음 배차의 departure_date - 20분 < 현재 배차의 arrival_date 조건
+            if next_departure_date - timedelta(minutes=20) <= current_arrival_date:
+                driver_check.drive_time_has_issue = False
+                driver_check.save()
+
+        
 class EveningChecklistView(APIView):
     def get(self, request, date):
         try:
@@ -486,6 +1028,7 @@ class EveningChecklistView(APIView):
         if serializer.is_valid():
             instance = serializer.save()
             instance.submit_check = True
+            instance.checklist_submit_time = str(datetime.now())[11:16]
             instance.save()
             response = {
                 'result': 'true',
@@ -578,6 +1121,7 @@ class DrivingHistoryView(APIView):
         if serializer.is_valid():
             instance = serializer.save()
             instance.submit_check = True
+            instance.submit_time = str(datetime.now())[11:16]
             instance.date = date
             instance.save()
             response = {
@@ -594,6 +1138,99 @@ class DrivingHistoryView(APIView):
             }
         }
         return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+class NewDrivingHistoryView(APIView):
+    def get(self, request):
+        
+        serializer = ConnectRequestSerializer(data=request.GET)
+
+        if not serializer.is_valid():
+            return StandardResponse.get_response(False, '1', {'error' : 'invalid connect id'}, status.HTTP_400_BAD_REQUEST)
+
+        id = self.request.GET.get('id')
+        work_type = self.request.GET.get('work_type')
+
+        try:
+            if work_type == '출근' or work_type == '퇴근':
+                connect = DispatchRegularlyConnect.objects.get(id=id)
+                driving_history = DrivingHistory.objects.get(regularly_connect_id=id)
+            else: # work_type == '일반'
+                connect = DispatchOrderConnect.objects.get(id=id)
+                driving_history = DrivingHistory.objects.get(order_connect_id=id)
+            
+            data = DrivingHistorySerializer(driving_history).data
+            return StandardResponse.get_response(True, data, "", status.HTTP_200_OK)
+
+        except DrivingHistory.DoesNotExist:
+            driving_history = DrivingHistory(
+                member = request.user,
+                creator = request.user,
+            )
+            if work_type == '출근' or work_type == '퇴근':
+                driving_history.regularly_connect_id = id
+            else:
+                driving_history.order_connect_id = id
+            driving_history.date = connect.departure_date[:10]
+            driving_history.save()
+        except DispatchOrderConnect.DoesNotExist:
+            return StandardResponse.get_response(False, '2', {'error' : 'Invalid connect id'}, status.HTTP_404_NOT_FOUND)
+        except DispatchRegularlyConnect.DoesNotExist:
+            return StandardResponse.get_response(False, '2', {'error' : 'Invalid connect id'}, status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return StandardResponse.get_response(False, '3', {'error' : f'{e}'}, status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request):
+        data = request.data.copy()
+        data['member'] = request.user.id
+        data['creator'] = request.user.id
+        
+        id = data['id']
+        work_type = data['work_type']
+
+        if not (work_type and id):
+            return StandardResponse.get_response(False, '1', {'error' : 'id and work_type'}, status.HTTP_400_BAD_REQUEST)
+
+        try:
+            if work_type == '출근' or work_type == '퇴근':
+                data['regularly_connect_id'] = id
+                connect = DispatchRegularlyConnect.objects.get(id=id)
+                driving_history = DrivingHistory.objects.get(regularly_connect_id=id)
+            elif work_type == '일반':
+                data['order_connect_id'] = id
+                connect = DispatchOrderConnect.objects.get(id=id)
+                driving_history = DrivingHistory.objects.get(order_connect_id=id)
+            else:
+                return StandardResponse.get_response(False, '1', {'error' : 'id and work_type'}, status.HTTP_400_BAD_REQUEST)
+            date = connect.departure_date[:10]
+
+        # id 에러
+        except DispatchOrderConnect.DoesNotExist:
+            return StandardResponse.get_response(False, '2', {'error' : 'Invalid connect id'}, status.HTTP_404_NOT_FOUND)
+        except DispatchRegularlyConnect.DoesNotExist:
+            return StandardResponse.get_response(False, '2', {'error' : 'Invalid connect id'}, status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return StandardResponse.get_response(False, '3', {'error' : str(e)}, status.HTTP_400_BAD_REQUEST)
+
+        serializer = DrivingHistorySerializer(driving_history, data=data)
+        
+        if serializer.is_valid():
+            instance = serializer.save()
+            if data.get('arrival_km', ''):
+                instance.submit_check = True
+                instance.submit_time = str(datetime.now())[11:16]
+            instance.date = date
+            instance.save()
+            data = serializer.data
+
+            current_status = connect.status
+            # connect status 다음 상태 값으로 변경
+            if current_status == ConnectStatus.DRIVE_LOG_START or current_status == ConnectStatus.DRIVE_LOG_END:
+                connect.status = ConnectStatus.get_next_status(current_status)
+                connect.save()
+            
+            data['current_status'] = connect.status
+            return StandardResponse.get_response(True, data, "", status.HTTP_200_OK)
+        return StandardResponse.get_response(False, '4', serializer.errors, status.HTTP_400_BAD_REQUEST)
 
 class TeamConnectListView(APIView):
     def get(self, request):
@@ -829,6 +1466,13 @@ class EstimateView(APIView):
             # "time_list" : request.data[''],
             "creator" : request.user.id
         }
+
+        #     # 전화번호 인증이 완료되었는지 확인
+        # if not cache.get(f"verified_{request.data['phone']}"):
+        #     return Response({
+        #         'result': 'false',
+        #         'message': '전화번호 인증이 완료되지 않았습니다.'
+        #     }, status=status.HTTP_400_BAD_REQUEST)
 
         
         serializer = DispatchOrderEstimateSerializer(data=data)
@@ -1100,8 +1744,86 @@ class TourView(APIView):
         except Exception as e:
             response = set_response_false('1', {'error': f"{e}"})
             return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# 전화번호 인증 코드 전송
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def send_code(request) :
+    customer_phone = request.data.get('customer_phone')
+
+    if not customer_phone :
+        response = {
+            'result' : 'false',
+            'data': '1',
+            'message' : '전화번호를 입력해주세요'
+        }
+        return Response(response, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        # 인증 코드 생성 및 전송
+        verification_code = generate_verification_code()
+        send_verification_code(customer_phone, verification_code)
+
+        # 인증 코드를 캐시에 저장 (5분 동안 유지)
+        cache.set(customer_phone, verification_code, timeout=300) 
         
 
+        response = {
+            'result': 'true',
+            'data': '0',
+            'message': '인증 코드가 성공적으로 전송되었습니다.'
+        }
+        return Response(response, status=status.HTTP_200_OK)
+    
+    except Exception as e:
+        response = {
+            'result': 'false',
+            'data': '2',
+            'message': str(e)           
+        }
+        return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)   
+        
+
+# 전화번호 인증 코드 검증 
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_code(request):
+    customer_phone = request.data.get('customer_phone')
+    verification_code = request.data.get('verification_code')
+
+    if not customer_phone or not verification_code:
+        
+        return Response({
+            'result': 'false',
+            'data': '1',
+            'message': '전화번호와 인증 코드를 모두 입력해주세요.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # 캐시에서 저장된 인증 코드 가져오기
+    stored_code = cache.get(customer_phone)
+
+    if stored_code is None:
+        
+        return Response({
+            'result': 'false',
+            'data': '2',
+            'message': '인증 코드가 만료되었거나 잘못된 전화번호입니다.'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if verification_code == stored_code:
+        cache.set(f"verified_{customer_phone}", True, timeout=3600)  # 인증 완료 상태 캐시에 저장
+        # 인증 성공 처리
+        return Response({
+            'result': 'true',
+            'data': '0',
+            'message': '인증이 성공적으로 완료되었습니다.'
+        }, status=status.HTTP_200_OK)
+    else:
+        return Response({
+            'result': 'false',
+            'data': '3',
+            'message': '잘못된 인증 코드입니다.'
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 # async def do_async():
 #     try:

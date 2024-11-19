@@ -1,8 +1,11 @@
 from django.db import models
+from django.db.models import F
 from crudmember.models import Category
 from humanresource.models import Member
 from datetime import datetime
+from enum import Enum
 from uuid import uuid4
+from firebase.media_firebase import delete_firebase_file
 
 class Vehicle(models.Model):
     # 차량정보
@@ -37,7 +40,7 @@ class Vehicle(models.Model):
     led = models.BooleanField(verbose_name='전광판유무', default=False)
     fridge = models.BooleanField(verbose_name='냉장고유무', default=False)
     sing = models.BooleanField(verbose_name='노래방유무', default=False)
-    usb = models.BooleanField(verbose_name='USB 유무', default=False)
+    usb = models.BooleanField(verbose_name='USB유무', default=False)
     water_heater = models.BooleanField(verbose_name='온수기유무', default=False)
     tv = models.BooleanField(verbose_name='tv유무', default=False)
 
@@ -50,24 +53,149 @@ class Vehicle(models.Model):
     pub_date = models.DateTimeField(verbose_name='작성시간', auto_now_add=True, null=False)
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
     
+    def count_filled_fields(self):
+        """차량 필드 중 값이 채워진 필드의 개수를 계산하고 디버깅 출력"""
+        
+        fields_to_check = [
+            # 차량정보
+            self.vehicle_num0,
+            self.vehicle_num,
+            self.vehicle_id,
+            self.motor_type,
+            self.rated_output,
+            self.vehicle_type,
+            self.maker,
+            self.model_year,
+            self.release_date,
+            self.driver,
+            # self.use,
+            self.passenger_num,
+            self.check_date,
+            self.type,
+            self.garage,
+            self.remark,
+
+            # 차량가격
+            self.vehicle_price,
+            self.depreciation_month,
+            self.number_price,
+            self.depreciation_year,
+            self.insurance_pay_date,
+            self.insurance_price,
+            self.monthly_installment,
+            self.remaining_installment_amount,
+
+            # 차량옵션
+            # self.led,
+            # self.cold,
+            # self.sing,
+            # self.usb,
+            # self.hot,
+            # self.tv,
+        ]
+
+        # 값이 있는 필드만 세기 (None과 빈 문자열 제외)
+        filled_fields_count = sum(1 for field in fields_to_check if field not in [None, ''])
+        
+        # 디버깅 출력
+        # print("일반 필드 값:")
+        # for field in fields_to_check:
+        #     print(f"Field: {field}, Is Counted: {field not in [None, '']}")
+
+        return filled_fields_count
+
+
     def __str__(self):
         return f'{self.id} / {self.vehicle_num}'
+
+class Maintenance(models.Model):
+    MAINTENANCE_CHOICES = [
+        ('정비', '정비'),
+        ('튜닝', '튜닝'),
+        ('점검', '점검')
+    ]
+
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.SET_NULL, related_name='maintenance_records', null=True)
+    type = models.CharField(verbose_name='구분', max_length=100, choices=MAINTENANCE_CHOICES)
+    work_date = models.DateField(verbose_name='작업일자')
+    content = models.TextField(verbose_name='작업내용')
+    cost = models.IntegerField(verbose_name='비용')
+
+    creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="maintenance_creator", db_column="user_id", null=True)
+    pub_date = models.DateTimeField(verbose_name='작성시간', auto_now_add=True, null=False)
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
+
+    def save(self, *args, **kwargs):
+        if self.vehicle:
+            if self.type == '정비':
+                # self.vehicle.total_maintenance_cost += self.cost
+                self.vehicle.total_maintenance_cost = F('total_maintenance_cost') + self.cost
+            elif self.type == '튜닝':
+                # self.vehicle.total_tuning_cost += self.cost
+                self.vehicle.total_tuning_cost = F('total_tuning_cost') + self.cost
+            self.vehicle.save()
+
+        # super() 호출하여 실제 저장 처리
+        super().save(*args, **kwargs)
+
+
+class DocumentType(Enum):
+    VEHICLE_REGISTRATION_CERTIFICATE = '차량등록증'
+    VEHICLE_FUNCTIONAL_DIAGNOSIS = '자동차기능종합진단서'
+    VEHICLE_INSURANCE = '차량보험'
+    VEHICLE_INSTALLMENT = '차량할부'
+
+    @classmethod
+    def choices(cls):
+        return [(key.value, key.value) for key in cls]
 
 class VehicleDocument(models.Model):
     def get_file_path(instance, filename):
         
         ymd_path = datetime.now().strftime('%Y/%m/%d')
         uuid_name = uuid4().hex
-        return '/'.join(['vehicle/', ymd_path, uuid_name])
+        return '/'.join(['vehicle/document', uuid_name])
 
     vehicle_id = models.ForeignKey(Vehicle, on_delete=models.CASCADE,related_name="vehicle_file", db_column="vehicle_id", null=False)
     file = models.FileField(upload_to=get_file_path, blank=True, null=True)
-    filename = models.CharField(max_length=1024, null=True, verbose_name='첨부파일명')
-    # 보험영수증, 차량등록증 저장
-    type = models.CharField(max_length=30, null=True, verbose_name='종류')
+    filename = models.TextField(null=True, verbose_name='첨부파일명')
+    path = models.TextField(null=True, verbose_name='경로')
+    type = models.CharField(max_length=30, verbose_name='종류', choices=DocumentType.choices())
     creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="vehicle_document_user", db_column="user_id", null=True)
     pub_date = models.DateTimeField(verbose_name='작성시간', auto_now_add=True, null=False)
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
+
+    def delete(self, *args, **kwargs):
+        # firebase에서 파일 삭제
+        delete_firebase_file(self.path)
+        super().delete(*args, **kwargs)
+        
+class VehiclePhoto(models.Model):
+    PHOTO_TYPE_CHOICES = [
+        ('차량 앞', '차량 앞'),
+        ('차량 뒤', '차량 뒤'),
+        ('차량 옆', '차량 옆')
+    ]
+
+    def get_file_path(instance, filename):
+        uuid_name = uuid4().hex
+        return '/'.join(['vehicle/photo', uuid_name])
+    
+    driver = models.ForeignKey(Member, on_delete=models.SET_NULL, null=True, related_name="vehicle_photo",)
+    date = models.CharField(max_length=30, verbose_name='날짜')
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE, related_name="vehicle_photo", db_column="vehicle_id", null=False)
+    file = models.FileField(upload_to=get_file_path, blank=True, null=True)
+    filename = models.TextField(null=True, verbose_name='첨부파일명')
+    path = models.TextField(null=True, verbose_name='경로')
+    type = models.CharField(max_length=30, verbose_name='종류', choices=PHOTO_TYPE_CHOICES)
+    creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="vehicle_photo_user", db_column="user_id", null=True)
+    pub_date = models.DateTimeField(verbose_name='작성시간', auto_now_add=True, null=False)
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
+
+    def delete(self, *args, **kwargs):
+        # firebase에서 파일 삭제
+        delete_firebase_file(self.path)
+        super().delete(*args, **kwargs)
 
 class Refueling(models.Model):
     refueling_date = models.CharField(verbose_name='주유일', max_length=100, null=False)
@@ -82,7 +210,18 @@ class Refueling(models.Model):
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
     
 class DailyChecklist(models.Model):
+    @classmethod
+    def create_new(cls, date: str, user: Member):
+        instance = cls(
+            date = date,
+            member = user,
+            creator = user
+        )
+        instance.save()
+        return instance
+    
     submit_check = models.BooleanField(verbose_name="제출여부", null=False, default=False)
+    submit_time = models.CharField(verbose_name="제출시간", max_length=10, blank=True)
     member = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="daily_checklist_member", null=True)
     date = models.CharField(verbose_name="날짜", max_length=100, null=False, blank=False)
     bus_id = models.ForeignKey(Vehicle, on_delete=models.SET_NULL, related_name="daily_checklist_bus_id", null=True)
