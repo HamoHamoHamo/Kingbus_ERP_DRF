@@ -123,6 +123,7 @@ class DailyChecklistView(APIView):
         if serializer.is_valid():
             instance = serializer.save()
             instance.submit_check = True
+            instance.submit_time = str(datetime.now())[11:16]
             instance.save()
             response = {
                 'result': 'true',

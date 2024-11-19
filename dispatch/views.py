@@ -404,12 +404,15 @@ class DailyRoutineView(APIView):
         user = request.user
 
         tasks = self.get_connect_list(date, user)
+        
+        go_to_work = self.get_go_to_work_data(tasks)
         get_off_work = self.get_get_off_work_data(date, user)
         info = self.get_current_task(tasks)
 
         data = {
             "status": info['status'],
             "info": info,
+            "go_to_work": go_to_work,
             "tasks": tasks,
             "get_off_work": get_off_work,
         }
@@ -434,6 +437,7 @@ class DailyRoutineView(APIView):
         current_connect = DispatchConnectService.get_current_connect(tasks)
         if current_connect:
             return {
+                "work_type": current_connect['work_type'],
                 "dispatch_id": current_connect['dispatch_id'],
                 "departure_time": current_connect['departure_date'][11:16],
                 "bus_id": current_connect['bus_id'],
@@ -443,14 +447,29 @@ class DailyRoutineView(APIView):
             }
         # 조건에 맞는 배차가 없는 경우
         return {
-            "dispatch_id": "",
+            "dispatch_id": None,
             "departure_time": "",
-            "bus_id": "",
+            "bus_id": None,
             "bus_num": "",
             "departure": "",
             "status": "",
         }
 
+    # 출근 데이터 불러오기
+    def get_go_to_work_data(self, tasks):
+        if tasks:
+            first = tasks[0]
+            first_connect = DriverCheck.get_instance(first['dispatch_id'], first['work_type'])
+        
+            return {
+                "wake_time": first_connect.wake_time,
+                "attendance_time": first_connect.drive_time,
+            }
+        else:
+            return {
+                "wake_time": "",
+                "attendance_time": ""
+            }
     
     # 퇴근 데이터 불러오기
     def get_get_off_work_data(self, date, user):
@@ -1183,8 +1202,9 @@ class NewDrivingHistoryView(APIView):
         
         if serializer.is_valid():
             instance = serializer.save()
-            instance.submit_check = True
-            instance.submit_time = str(datetime.now())[11:16]
+            if data.get('arrival_km', ''):
+                instance.submit_check = True
+                instance.submit_time = str(datetime.now())[11:16]
             instance.date = date
             instance.save()
             data = serializer.data
