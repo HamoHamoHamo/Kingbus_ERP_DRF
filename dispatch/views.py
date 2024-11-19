@@ -395,6 +395,9 @@ class DailyGetOffWorkView(APIView):
 
 
 class DailyRoutineView(APIView):
+    roll_call_time = "저녁 점호"
+    tomorrow_dispatch_check_time = "배차 확인"
+    get_off_time = "퇴근"
     def get(self, request, date):
         try:
             datetime.strptime(date, DATE_FORMAT)
@@ -408,9 +411,19 @@ class DailyRoutineView(APIView):
         go_to_work = self.get_go_to_work_data(tasks)
         get_off_work = self.get_get_off_work_data(date, user)
         info = self.get_current_task(tasks)
+        
+        # 운행할 배차가 없을 때 저녁점호 데이터 확인해서 status 결정
+        status_data = info['status']
+        if not status_data and tasks:
+            if not get_off_work['roll_call_time']:
+                status_data = self.roll_call_time
+            elif not get_off_work['tomorrow_dispatch_check_time']:
+                status_data = self.tomorrow_dispatch_check_time
+            elif not get_off_work['get_off_time']:
+                status_data = self.get_off_time
 
         data = {
-            "status": info['status'],
+            "status": status_data,
             "info": info,
             "go_to_work": go_to_work,
             "tasks": tasks,
