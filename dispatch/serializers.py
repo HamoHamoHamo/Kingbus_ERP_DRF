@@ -110,7 +110,7 @@ class DispatchRegularlyConnectDetailSerializer(serializers.ModelSerializer):
     stations = serializers.SerializerMethodField()  # 필터링된 정류장 목록 가져오기
     bus_num = serializers.ReadOnlyField(source="bus_id.vehicle_num")  # 버스 번호
     references = serializers.ReadOnlyField(source="regularly_id.references")  # DispatchRegularly 모델의 references 필드
-    serializers.ReadOnlyField(source="regularly_id.maplink")
+    maplink = serializers.ReadOnlyField(source="regularly_id.maplink")
     class Meta:
         model = DispatchRegularlyConnect  # 정기 배차 모델
         fields = ['id', 'work_type', 'bus_id', 'bus_num', 'stations', 'references', 'locations', 'maplink']
