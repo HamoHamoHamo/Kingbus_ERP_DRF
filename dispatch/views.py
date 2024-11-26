@@ -208,7 +208,7 @@ class ProblemListDispatches(APIView):
 
     def get(self, request, date):
         # 관리자와 팀장 권한 확인
-        if request.user.role not in ["관리자", "팀장"] :
+        if request.user.authority > 3:
             return Response({
                 'result': 'false',
                 'data': None,
@@ -252,7 +252,7 @@ class ProblemDispatchDetailView(APIView):
     def get(self, request):
         
         # 관리자와 팀장 권한 확인
-        if request.user.role not in ["관리자", "팀장"] :
+        if request.user.authority > 3:
             return Response({
                 'result': 'false',
                 'data': None,
