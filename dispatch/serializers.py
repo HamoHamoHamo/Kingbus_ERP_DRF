@@ -73,8 +73,14 @@ class DispatchRegularlyConnectListSerializer(serializers.ModelSerializer):
     
     def get_connect_check(self, obj):
         # connect_check 값을 "1" 또는 "0"으로 저장한 경우 "true"/"false"로 변환
-        check_value = obj.check_regularly_connect.connect_check if obj.check_regularly_connect else "0"
-        return "true" if check_value == "1" else "false"    
+        check_value = obj.check_regularly_connect.connect_check if obj.check_regularly_connect else ""
+        if check_value == "1":
+            return "true"
+        elif check_value == "0":
+            return "false"
+        # 수락이나 거절 안 했을 떄 ""
+        else:
+            return ""
     
     def get_is_vehicle_checked(self, obj):
         # departure_date에서 날짜 부분만 추출
