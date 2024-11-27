@@ -408,7 +408,7 @@ class DailyRoutineView(APIView):
 
         tasks = self.get_connect_list(date, user)
         
-        go_to_work = self.get_go_to_work_data(tasks)
+        go_to_work = self.get_go_to_work_data(tasks, date, user)
         get_off_work = self.get_get_off_work_data(date, user)
         info = self.get_current_task(tasks)
         
@@ -469,14 +469,16 @@ class DailyRoutineView(APIView):
         }
 
     # 출근 데이터 불러오기
-    def get_go_to_work_data(self, tasks):
+    def get_go_to_work_data(self, tasks, date, user):
         if tasks:
             first = tasks[0]
             first_connect = DriverCheck.get_instance(first['dispatch_id'], first['work_type'])
+
+            checklist = DailyChecklist.objects.filter(date=date, member=user).last()
         
             return {
                 "wake_time": first_connect.wake_time,
-                "attendance_time": first_connect.drive_time,
+                "attendance_time": checklist.submit_time, # 일일점검 완료 시간
             }
         else:
             return {
