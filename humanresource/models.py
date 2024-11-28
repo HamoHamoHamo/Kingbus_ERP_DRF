@@ -6,6 +6,7 @@ from common.constant import TODAY, WEEK, FORMAT
 from django.apps import apps
 from salary.selectors import SalarySelector
 from salary.models import HourlyWage
+from django.core.exceptions import ValidationError
 
 class Team(models.Model):
     name =models.CharField(verbose_name='팀이름', max_length=100, null=False, blank=False)
@@ -23,7 +24,7 @@ class Member(models.Model):
     is_authenticated = True
     is_active = True
 
-    user_id = models.CharField(max_length=100, verbose_name='사용자id', unique=True, null=True, blank=True)
+    user_id = models.CharField(max_length=100, verbose_name='사용자id', null=True, blank=True)
     password = models.TextField(verbose_name='비밀번호', null=False, blank=True)
     name = models.CharField(verbose_name='이름', max_length=100, null=False)
     role = models.CharField(verbose_name='업무', max_length=100, null=False)
@@ -62,11 +63,21 @@ class Member(models.Model):
     overtime_allowance = models.CharField(verbose_name='근로추가수당', max_length=20, null=False, default=0)
     meal = models.CharField(verbose_name='식대', max_length=20, null=False, default=0)
     
+    new_annual_allowance = models.CharField(verbose_name="연차수당2", max_length=100, null=False, default=0)
+    team_leader_allowance_roll_call = models.CharField(verbose_name="팀장수당(점호관리)", max_length=100, null=False, default=0)
+    team_leader_allowance_vehicle_management = models.CharField(verbose_name="팀장수당(차량관리)", max_length=100, null=False, default=0)
+    team_leader_allowance_task_management = models.CharField(verbose_name="팀장수당(업무관리)", max_length=100, null=False, default=0)
+    full_attendance_allowance = models.CharField(verbose_name="만근수당", max_length=100, null=False, default=0)
+    diligence_allowance = models.CharField(verbose_name="성실수당", max_length=100, null=False, default=0)
+    accident_free_allowance = models.CharField(verbose_name="무사고수당", max_length=100, null=False, default=0)
+    welfare_meal_allowance = models.CharField(verbose_name="복리후생 (식대)", max_length=100, null=False, default=0)
+    welfare_fuel_allowance = models.CharField(verbose_name="복리후생(유류비)", max_length=100, null=False, default=0)
+    
     pub_date = models.DateTimeField(verbose_name="등록날짜", auto_now_add=True, null=False)
     creator = models.CharField(verbose_name='작성자 이름', max_length=100, null=False, blank=True)
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
     token = models.CharField(verbose_name='fcmtoken', max_length=500, null=False, blank=True)
-    authority = models.IntegerField(verbose_name='권한', null=False, default=4)
+    authority = models.IntegerField(verbose_name='권한', null=False, default=4) # 0=최고관리자, 1=관리자, 3=팀장, 4=기사
     use = models.CharField(verbose_name='사용여부', max_length=30, null=False, default='사용')
     def __str__(self):
         return self.name
@@ -108,6 +119,28 @@ class MemberFile(models.Model):
 #     def __str__(self):
 #         return self.member_id.name
 
+class Notification(models.Model):
+    CATEGORY_CHOCIES = [
+        ('문제발생', '문제발생'),
+        ('일정', '일정'),
+    ]
+
+    member_id = models.ForeignKey(Member, on_delete=models.CASCADE, related_name="notification", null=False)
+    title = models.CharField(verbose_name='제목', max_length=100, null=False)
+    content = models.CharField(verbose_name='내용', max_length=100, null=False)
+    is_read = models.BooleanField(verbose_name='확인 여부', null=False, default=False)
+    category = models.CharField(verbose_name='종류', max_length=100, null=False, choices=CATEGORY_CHOCIES)
+    send_datetime = models.CharField(verbose_name='', max_length=19, null=False)
+    creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="notification_creator", db_column="user_id", null=True)
+    pub_date = models.DateTimeField(verbose_name='작성시간', auto_now_add=True, null=False)
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
+
+    def clean(self):
+        # `yyyy-MM-dd HH:mm:ss` 형식 확인
+        try:
+            datetime.strptime(self.send_datetime, '%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            raise ValidationError("send_datetime must be in 'yyyy-MM-dd HH:mm:ss' format.")
 
 class Salary(models.Model):
     def set_new_annual_allowance(month, member):
