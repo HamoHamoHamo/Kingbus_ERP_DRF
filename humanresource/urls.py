@@ -17,6 +17,7 @@ urlpatterns = [
     # path('token/obtain', jwt_views.TokenObtainPairView.as_view(), name='token_create'),  # override sjwt stock token
     #path('logout', jwt_views.TokenBlacklistView.as_view(), name='logout'),
     path('token/refresh', views.TokenRefreshView.as_view(), name='token_refresh'),
+    path("notification/list", views.NotificationListView.as_view(), name="notification-list"), # 알림 조회 API
     
     # path('userinfo/name', views.userNamereturnView),
 ]
