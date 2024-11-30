@@ -2,7 +2,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.hashers import check_password
 
-from .models import Member, AccidentCase
+from .models import Member, AccidentCase, Notification
 
 class UserLoginSerializer(serializers.Serializer):
     user_id = serializers.CharField(max_length=100)
@@ -69,3 +69,11 @@ class AccidentCaseSereializer(serializers.ModelSerializer):
         fields = ['member','date','creator','carnum','route_name','accident_description', 'picture_our_vehicle', 'picture_thier_vehicle', 'picture_all_vehicles', 'picture_from_far', 'picture_from_close', 'picture_passenger_list']
         # 'kind_of_accident','damaged_car','accident_location','accident_time_occur','accident_time_solve','vehicle_speed','passenger_count',
 
+# 알림 보여주는 API를 위한 serializer
+class NotificationSerializer(serializers.ModelSerializer):
+    date = serializers.DateTimeField(source="send_datetime", format="%Y-%m-%d %H:%M:%S")
+    category = serializers.CharField()
+
+    class Meta:
+        model = Notification
+        fields = ["title", "content", "is_read", "category", "date"]

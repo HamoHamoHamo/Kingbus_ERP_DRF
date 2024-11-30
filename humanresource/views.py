@@ -25,12 +25,14 @@ from django.http import Http404, HttpResponse, HttpResponseNotAllowed, JsonRespo
 from PIL import Image
 from firebase.media_firebase import upload_to_firebase
 
-from .serializers import UserLoginSerializer, MemberListSerializer, MemberSerializer, AccidentCaseSereializer
+from .serializers import UserLoginSerializer, MemberListSerializer, MemberSerializer, AccidentCaseSereializer, NotificationSerializer
 from .models import Member, Salary, SalaryChecked, AccidentCase
 from dispatch.models import DispatchRegularlyConnect, DispatchOrderConnect
 from assignment.models import AssignmentConnect
 from common.constant import FORMAT
 from salary.services import SalaryDataController2
+from rest_framework.pagination import PageNumberPagination
+from .models import Notification as NotificationModel
 
 WEEK = ['(월)', '(화)', '(수)', '(목)', '(금)', '(토)', '(일)', ]
 TODAY = str(datetime.now())[:10]
@@ -619,3 +621,36 @@ class AccidentReportView(APIView):
         else:
             return Response({"message": "Request Body Error."}, status=status.HTTP_400_BAD_REQUEST)
 
+
+class NotificationPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+class NotificationListView(APIView):
+    pagination_class = NotificationPagination
+
+    def get(self, request, *args, **kwargs):
+        # 카테고리 필터링
+        category = request.query_params.get("category", None)
+        queryset = NotificationModel.objects.filter(member_id=request.user).order_by("-send_datetime")
+
+        if category:
+            queryset = queryset.filter(category=category)
+
+        # 페이징 처리
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request)
+        if page is not None:
+            serializer = NotificationSerializer(page, many=True)
+            paginated_response = paginator.get_paginated_response(serializer.data)
+
+            # 기존의 응답을 "data" 키 아래에 넣기
+            return Response({
+                "data": {
+                    "count": paginated_response.data["count"],
+                    "next": paginated_response.data["next"],
+                    "previous": paginated_response.data["previous"],
+                    "notification_list": paginated_response.data["results"]
+                }
+            })
