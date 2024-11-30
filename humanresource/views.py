@@ -33,7 +33,7 @@ from common.constant import FORMAT
 from salary.services import SalaryDataController2
 from rest_framework.pagination import PageNumberPagination
 from .models import Notification as NotificationModel
-
+from trp_drf.pagination import Pagination
 WEEK = ['(월)', '(화)', '(수)', '(목)', '(금)', '(토)', '(일)', ]
 TODAY = str(datetime.now())[:10]
 
@@ -621,15 +621,9 @@ class AccidentReportView(APIView):
         else:
             return Response({"message": "Request Body Error."}, status=status.HTTP_400_BAD_REQUEST)
 
-
-class NotificationPagination(PageNumberPagination):
-    page_size = 10
-    page_size_query_param = "page_size"
-    max_page_size = 100
-
 # 알림 전체 조회
 class NotificationListView(APIView):
-    pagination_class = NotificationPagination
+    pagination_class = Pagination
 
     def get(self, request, *args, **kwargs):
         # 카테고리 필터링
