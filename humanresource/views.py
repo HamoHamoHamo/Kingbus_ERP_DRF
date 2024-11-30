@@ -627,6 +627,7 @@ class NotificationPagination(PageNumberPagination):
     page_size_query_param = "page_size"
     max_page_size = 100
 
+# 알림 전체 조회
 class NotificationListView(APIView):
     pagination_class = NotificationPagination
 
@@ -645,7 +646,6 @@ class NotificationListView(APIView):
             serializer = NotificationSerializer(page, many=True)
             paginated_response = paginator.get_paginated_response(serializer.data)
 
-            # 기존의 응답을 "data" 키 아래에 넣기
             return Response({
                 "data": {
                     "count": paginated_response.data["count"],
@@ -654,3 +654,53 @@ class NotificationListView(APIView):
                     "notification_list": paginated_response.data["results"]
                 }
             })
+
+# is_read 필드 변경 (알림 읽음 여부)
+class NotificationUpdateView(APIView):
+    def patch(self, request):
+        try:
+            # notification_id 가져오기
+            notification_id = request.data.get("notification_id")
+            if not notification_id:
+                return Response({
+                    "result": "false",
+                    "message": "알림 ID가 필요합니다."
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # 알림 객체 가져오기
+            notification = NotificationModel.objects.filter(id=notification_id, member_id=request.user).first()
+            if not notification:
+                return Response({
+                    "result": "false",
+                    "message": "알림이 없거나 권한이 없습니다."
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # 이미 읽은 알림인지 확인
+            if notification.is_read:
+                return Response({
+                    'result': 'false',
+                    'message': '이미 읽은 알림입니다.',
+                    "data": {
+                        "id": notification.id,
+                        "is_read": notification.is_read
+                    },
+                }, status=status.HTTP_200_OK)
+            
+            # 읽음 상태 변경
+            notification.is_read = True
+            notification.save()
+
+            return Response({
+                "result": "true",
+                "message": "알림을 읽음으로 변경했습니다.",
+                "data": {
+                    "id": notification.id,
+                    "is_read": notification.is_read
+                }
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "result": "false",
+                "message": f"에러 발생: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
