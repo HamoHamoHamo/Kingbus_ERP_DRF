@@ -19,13 +19,13 @@ from firebase.firebase_file import upload_files
 from trp_drf.pagination import Pagination
 from humanresource.models import Member
 from vehicle.models import DailyChecklist
-from .models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrder, DispatchOrderStation, DispatchOrderTour, DispatchOrderTourCustomer, ConnectStatusFieldMapping, ConnectStatus, StationArrivalTime
+from .models import DriverCheck, DispatchRegularlyData, RegularlyGroup, DispatchOrderConnect, DispatchRegularlyConnect, ConnectRefusal, DispatchRegularlyRouteKnow, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrder, DispatchOrderStation, DispatchOrderTour, DispatchOrderTourCustomer, ConnectStatusFieldMapping, ConnectStatus, StationArrivalTime, DispatchRegularlyFavorite
 from .services import DispatchConnectService
 from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnectSerializer, \
     DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, DrivingHistorySerializer, \
     DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer, MorningChecklistSerializer, EveningChecklistSerializer, \
     TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer, DispatchOrderTourCustomerSerializer, LocationHistoryRequestSerializer, LocationHistorySerializer, DriverCheckRequestSerializer, StationArrivalTimeSerializer, ConnectRequestSerializer, DailyDispatchOrderConnectListSerializer, DailyDispatchRegularlyConnectListSerializer, GetOffWorkDataSerialzier, GetOffWorkRequestSerializer, DispatchRegularlyConnectListSerializer, DispatchOrderConnectListSerializer, DispatchOrderConnectDetailSerializer, DispatchRegularlyConnectDetailSerializer, \
-    ProblemOrderConnectListSerializer, ProblemRegularlyConnectListSerializer, ProblemOrderConnectDetailSerializer, ProblemRegularlyConnectDetailSerializer
+    ProblemOrderConnectListSerializer, ProblemRegularlyConnectListSerializer, ProblemOrderConnectDetailSerializer, ProblemRegularlyConnectDetailSerializer, DispatchRegularlyFavoriteSerializer
 from my_settings import SUNGHWATOUR_CRED_PATH, CRED_PATH
 from itertools import chain
 from operator import itemgetter
@@ -903,7 +903,71 @@ class RegularlyKnow(APIView):
                 },
             }
             return Response(response, status=status.HTTP_400_BAD_REQUEST)
-        
+
+# 배차 즐겨찾기 생성, 삭제
+class DispatchRegularlyFavoriteView(APIView):
+    def post(self, request):
+        data = request.data.copy()
+        data['regularly_id'] = request.data['regularly_id']  # regularly_id 요청
+        data['driver_id'] = request.data.get('driver_id', request.user.id)  # driver_id 없으면 현재 사용자 ID 사용
+        data['creator'] = request.user.id
+
+        # 이미 즐겨찾기 있는지 확인한다
+        if DispatchRegularlyFavorite.objects.filter(driver_id=data['driver_id'], regularly_id=data['regularly_id']).exists():
+            response = {
+                'result': 'false',
+                'data': 2,
+                'message': {
+                    'detail': '이미 생성한 즐겨찾기입니다.'
+                },
+            }
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+        # Serializer 호출
+        serializer = DispatchRegularlyFavoriteSerializer(data=data)
+        if serializer.is_valid(raise_exception=False):
+            serializer.save()
+            response = {
+                'result': 'true',
+                'data': serializer.data,
+                'message': '',
+            }
+            return Response(response, status=status.HTTP_201_CREATED)
+        else:
+            response = {
+                'result': 'false',
+                'data': '1',
+                'message': serializer.errors,
+            }
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request):
+        data = {
+            'regularly_id': request.data['id'],  # regularly_id 요청
+            'driver_id': request.data.get('driver_id', request.user.id)
+        }
+
+        # 즐겨찾기 있는지 확인
+        favorite = DispatchRegularlyFavorite.objects.filter(regularly_id=data['regularly_id'], driver_id=data['driver_id'])
+        if favorite.exists():
+            favorite.delete()
+            response = {
+                'result': 'true',
+                'data': None,
+                'message': '즐겨찾기가 삭제되었습니다.',
+            }
+            return Response(response, status=status.HTTP_200_OK)
+        else:
+            response = {
+                'result': 'false',
+                'data': '1',
+                'message': {
+                    'detail': '해당 즐겨찾기가 존재하지 않습니다.'
+                },
+            }
+            return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+
 class MorningChecklistView(APIView):
     def get(self, request, date):
         try:

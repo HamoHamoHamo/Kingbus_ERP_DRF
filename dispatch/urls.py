@@ -19,6 +19,7 @@ urlpatterns = [
     path('regularly', views.RegularlyList.as_view()),
     path('regularly/group', views.RegularlyGroupList.as_view()),
     path('regularly/know', views.RegularlyKnow.as_view()),
+    path('regularly/favorite', views.DispatchRegularlyFavoriteView.as_view()), # 배차 즐겨찾기 생성, 삭제
     path('checklist/morning/<str:date>', views.MorningChecklistView.as_view()),
     path('checklist/evening/<str:date>', views.EveningChecklistView.as_view()),
     path('drivinghistory', views.DrivingHistoryView.as_view()),

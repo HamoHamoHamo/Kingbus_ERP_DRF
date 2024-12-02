@@ -7,7 +7,8 @@ from common.validators import TimeFormatValidator, DateFormatValidator
 from .models import DispatchOrderStation, DispatchOrder, DispatchRegularly, \
     DispatchRegularlyConnect, DispatchOrderConnect, DriverCheck, ConnectRefusal, \
     DispatchRegularlyWaypoint, DispatchRegularlyRouteKnow, DispatchRegularlyData, \
-    RegularlyGroup, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrderTourCustomer, ConnectStatusFieldMapping, StationArrivalTime, DispatchRegularlyStation
+    RegularlyGroup, MorningChecklist, EveningChecklist, DrivingHistory, DispatchOrderTourCustomer, \
+        ConnectStatusFieldMapping, StationArrivalTime, DispatchRegularlyStation, DispatchRegularlyFavorite
 from crudmember.models import Category
 from vehicle.models import DailyChecklist
 from humanresource.models import Member
@@ -437,6 +438,11 @@ class RegularlyKnowSerializer(serializers.ModelSerializer):
         model = DispatchRegularlyRouteKnow
         fields = '__all__'
 
+# 배차 즐겨찾기
+class DispatchRegularlyFavoriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DispatchRegularlyFavorite
+        fields = '__all__'
 
 class DispatchRegularlyDataSerializer(serializers.ModelSerializer):
     know = serializers.SerializerMethodField()
