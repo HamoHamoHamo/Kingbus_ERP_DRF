@@ -446,11 +446,8 @@ class DispatchRegularlyDataSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def get_know(self, obj):
-        user_id = self.context.get('user_id')
-        if obj.regularly_route_know.filter(driver_id=user_id).exists():
-            return 'true'
-        else:
-            return 'false'
+        # 미리 annotate된 값을 사용
+        return obj.is_known if hasattr(obj, 'is_known') else 'false'
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)

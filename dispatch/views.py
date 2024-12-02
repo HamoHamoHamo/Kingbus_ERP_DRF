@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
-from django.db.models import Q
+from django.db.models import Case, When, Value, CharField, Q
 from django.forms.models import model_to_dict
 from django.shortcuts import get_object_or_404, render
 from django.http import Http404, JsonResponse
@@ -756,14 +756,32 @@ class RegularlyList(ListAPIView):
     def get_queryset(self):
         group_id = self.request.GET.get('group', '')
         search = self.request.GET.get('search', '')
+        user_id = self.request.user.id
 
-        if not group_id:
+        base_queryset = DispatchRegularlyData.objects.filter(use='사용')
+
+        if not group_id and not search:
             group = RegularlyGroup.objects.order_by('number').first()
-            return DispatchRegularlyData.objects.filter(group=group).filter(Q(route__contains=search) | Q(departure__contains=search) | Q(arrival__contains=search)).filter(use='사용').order_by('num1', 'number1', 'num2', 'number2')
+            queryset = base_queryset.order_by('group__number', 'num1', 'number1', 'num2', 'number2')
         else:
             group = get_object_or_404(RegularlyGroup, id=group_id)
-            return DispatchRegularlyData.objects.filter(group=group).filter(Q(route__contains=search) | Q(departure__contains=search) | Q(arrival__contains=search)).filter(use='사용').order_by('num1', 'number1', 'num2', 'number2')
+            queryset = base_queryset.filter(group=group).filter(
+                Q(route__contains=search) | 
+                Q(departure__contains=search) | 
+                Q(arrival__contains=search)
+            ).order_by('num1', 'number1', 'num2', 'number2')
 
+        # distinct() 추가
+        queryset = queryset.annotate(
+            is_known=Case(
+                When(regularly_route_know__driver_id=user_id, then=Value('true')),
+                default=Value('false'),
+                output_field=CharField()
+            )
+        ).distinct()
+
+        return queryset
+    
     def get_serializer_context(self):
         context = super().get_serializer_context()
         context['user_id'] = self.request.user.id
