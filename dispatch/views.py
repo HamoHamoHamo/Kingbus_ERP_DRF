@@ -762,16 +762,21 @@ class RegularlyList(ListAPIView):
 
         base_queryset = DispatchRegularlyData.objects.filter(use='사용')
 
-        if not group_id and not search:
-            group = RegularlyGroup.objects.order_by('number').first()
-            queryset = base_queryset.order_by('group__number', 'num1', 'number1', 'num2', 'number2')
+        # 그룹 및 검색 조건 추가
+        if not group_id:  # 그룹이 입력되지 않으면 전체 그룹
+            queryset = base_queryset
         else:
             group = get_object_or_404(RegularlyGroup, id=group_id)
-            queryset = base_queryset.filter(group=group).filter(
-                Q(route__contains=search) | 
-                Q(departure__contains=search) | 
+            queryset = base_queryset.filter(group=group)
+
+        if search:
+            queryset = queryset.filter(
+                Q(route__contains=search) |
+                Q(departure__contains=search) |
                 Q(arrival__contains=search)
-            ).order_by('num1', 'number1', 'num2', 'number2')
+            )
+
+        queryset = queryset.order_by('group__number', 'num1', 'number1', 'num2', 'number2')
 
         # 서브쿼리를 사용해 know 값 추가
         know_subquery = DispatchRegularlyRouteKnow.objects.filter(
