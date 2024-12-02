@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
-from django.db.models import Case, When, Value, CharField, Q
+from django.db.models import Case, When, Value, CharField, Q, Exists, OuterRef
 from django.forms.models import model_to_dict
 from django.shortcuts import get_object_or_404, render
 from django.http import Http404, JsonResponse
@@ -756,6 +756,8 @@ class RegularlyList(ListAPIView):
     def get_queryset(self):
         group_id = self.request.GET.get('group', '')
         search = self.request.GET.get('search', '')
+        know = self.request.GET.get('know', '') 
+        favorite = self.request.GET.get('favorite', '')
         user_id = self.request.user.id
 
         base_queryset = DispatchRegularlyData.objects.filter(use='사용')
@@ -771,16 +773,42 @@ class RegularlyList(ListAPIView):
                 Q(arrival__contains=search)
             ).order_by('num1', 'number1', 'num2', 'number2')
 
-        # distinct() 추가
+        # 서브쿼리를 사용해 know 값 추가
+        know_subquery = DispatchRegularlyRouteKnow.objects.filter(
+            regularly_id=OuterRef('id'),
+            driver_id=user_id
+        )
+
+        # 서브쿼리를 사용해 favorite 값 추가
+        favorite_subquery = DispatchRegularlyFavorite.objects.filter(
+            regularly_id=OuterRef('id'),
+            driver_id=user_id
+        )
+
+        # annotate로 'know' 및 'favorite' 필드 추가
         queryset = queryset.annotate(
-            is_known=Case(
-                When(regularly_route_know__driver_id=user_id, then=Value('true')),
+            know=Case(
+                When(Exists(know_subquery), then=Value('true')),
+                default=Value('false'),
+                output_field=CharField()
+            ),
+            favorite=Case(
+                When(Exists(favorite_subquery), then=Value('true')),
                 default=Value('false'),
                 output_field=CharField()
             )
-        ).distinct()
+        )
+
+        # know 필터링
+        if know not in [None, '']:
+            queryset = queryset.filter(know=know)
+
+        # favorite 필터링
+        if favorite not in [None, '']:
+            queryset = queryset.filter(favorite=favorite)
 
         return queryset
+    
     
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -788,16 +816,30 @@ class RegularlyList(ListAPIView):
         return context
 
     def list(self, request, *args, **kwargs):
-        response = super().list(request, *args, **kwargs)
+        queryset = self.filter_queryset(self.get_queryset())
+
+        # 노선 숙지된 수 계산
+        check_count = queryset.filter(know='true').count()
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            response_data = self.get_paginated_response(serializer.data).data
+        else:
+            serializer = self.get_serializer(queryset, many=True)
+            response_data = serializer.data
+
+        # 응답 데이터 구성
         data = {
             'result': 'true',
-            'data': {
-                'count': response.data['count'],
-                'next': response.data['next'],
-                'previous': response.data['previous'],
-                'regularly_list': response.data['results'],
-            },
             'message': '',
+            'data': {
+                'count': queryset.count(),
+                'check_count': check_count,
+                'next': response_data.get('next'),
+                'previous': response_data.get('previous'),
+                'regularly_list': response_data.get('results'),
+            },
         }
         return Response(data)
 

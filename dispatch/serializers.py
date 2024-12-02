@@ -446,7 +446,8 @@ class DispatchRegularlyFavoriteSerializer(serializers.ModelSerializer):
 
 class DispatchRegularlyDataSerializer(serializers.ModelSerializer):
     know = serializers.SerializerMethodField()
-
+    favorite = serializers.SerializerMethodField()
+    
     class Meta:
         model = DispatchRegularlyData
         fields = '__all__'
@@ -454,7 +455,11 @@ class DispatchRegularlyDataSerializer(serializers.ModelSerializer):
     def get_know(self, obj):
         # 미리 annotate된 값을 사용
         return obj.is_known if hasattr(obj, 'is_known') else 'false'
-
+    
+    def get_favorite(self, obj):
+        # 미리 annotate된 값을 사용
+        return obj.favorite if hasattr(obj, 'favorite') else 'false'
+    
     def to_representation(self, instance):
         representation = super().to_representation(instance)
         representation['group'] = RegularlyGroup.objects.get(id=representation['group']).name if representation['group'] else None
