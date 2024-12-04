@@ -475,6 +475,8 @@ class DailyRoutineView(APIView):
             first_connect = DriverCheck.get_instance(first['dispatch_id'], first['work_type'])
 
             checklist = DailyChecklist.objects.filter(date=date, member=user).last()
+            if not checklist:
+                checklist = DailyChecklist.create_new(date, user)
         
             return {
                 "wake_time": first_connect.wake_time,
