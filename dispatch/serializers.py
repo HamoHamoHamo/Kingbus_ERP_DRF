@@ -67,10 +67,11 @@ class DispatchRegularlyConnectListSerializer(serializers.ModelSerializer):
     connect_check = serializers.SerializerMethodField() 
     is_vehicle_checked = serializers.SerializerMethodField() 
     status = serializers.ReadOnlyField()
+    references = serializers.ReadOnlyField(source="regularly_id.references")
 
     class Meta:
         model = DispatchRegularlyConnect
-        fields = ['id', 'work_type', 'bus_id', 'bus_num' ,'departure_date', 'arrival_date', 'departure', 'arrival', 'maplink', 'connect_check', 'is_vehicle_checked', 'status']
+        fields = ['id', 'work_type', 'bus_id', 'bus_num' ,'departure_date', 'arrival_date', 'departure', 'arrival', 'maplink', 'connect_check', 'is_vehicle_checked', 'status', 'references']
     
     def get_connect_check(self, obj):
         # connect_check 값을 "1" 또는 "0"으로 저장한 경우 "true"/"false"로 변환
@@ -229,11 +230,11 @@ class DispatchOrderConnectListSerializer(serializers.ModelSerializer):
     connect_check = serializers.SerializerMethodField()
     is_vehicle_checked = serializers.SerializerMethodField()  
     status = serializers.ReadOnlyField()
-
+    references = serializers.ReadOnlyField(source="order_id.references")
 
     class Meta:
         model = DispatchOrderConnect
-        fields = ['id', 'work_type', 'bus_id', 'bus_num','departure_date', 'arrival_date', 'departure', 'arrival', 'maplink', 'connect_check', 'is_vehicle_checked', 'status']
+        fields = ['id', 'work_type', 'bus_id', 'bus_num','departure_date', 'arrival_date', 'departure', 'arrival', 'maplink', 'connect_check', 'is_vehicle_checked', 'status', 'references']
     
     def get_maplink(self, obj):
         # 일반 배차에는 maplink가 없으므로 빈 문자열을 반환
