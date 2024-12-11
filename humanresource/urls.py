@@ -12,13 +12,14 @@ urlpatterns = [
     path('maintenance', views.MaintenanceView.as_view()),
     path('member/list', views.MemberListView.as_view()),
     path('member', views.LoginMemberView.as_view()),
-    path('salary/detail', views.salary_detail, name='salary_detail'),
+    path('member/notification/list', views.NotificationListView.as_view(), name="notification_list"), # 알림 조회 API
+    path('member/notification/read', views.NotificationUpdateView.as_view(), name='notification_read'), # 알림 읽음 여부 API
     path('member/accident', views.AccidentReportView.as_view()),
+    path('salary/detail', views.salary_detail, name='salary_detail'),
     # path('token/obtain', jwt_views.TokenObtainPairView.as_view(), name='token_create'),  # override sjwt stock token
     #path('logout', jwt_views.TokenBlacklistView.as_view(), name='logout'),
     path('token/refresh', views.TokenRefreshView.as_view(), name='token_refresh'),
     path('user/notification/list', views.NotificationListView.as_view(), name="notification_list"), # 알림 조회 API
     path('user/notification/read', views.NotificationUpdateView.as_view(), name='notification_read'), # 알림 읽음 여부 API
-    
     # path('userinfo/name', views.userNamereturnView),
 ]
