@@ -17,6 +17,7 @@ urlpatterns = [
     path('connect/check', views.ConnectCheckView.as_view()),
     path('station/check', views.StationCheckView.as_view()),
     path('regularly', views.RegularlyList.as_view()),
+    path('regularly/<int:id>', views.RegularlyDetailView.as_view()),
     path('regularly/group', views.RegularlyGroupList.as_view()),
     path('regularly/know', views.RegularlyKnow.as_view()),
     path('regularly/favorite', views.DispatchRegularlyFavoriteView.as_view()), # 배차 즐겨찾기 생성, 삭제

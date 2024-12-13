@@ -25,7 +25,7 @@ from .serializers import DispatchRegularlyConnectSerializer, DispatchOrderConnec
     DriverCheckSerializer, ConnectRefusalSerializer, RegularlyKnowSerializer, DrivingHistorySerializer, \
     DispatchRegularlyDataSerializer, DispatchRegularlyGroupSerializer, MorningChecklistSerializer, EveningChecklistSerializer, \
     TeamRegularlyConnectSerializer, TeamOrderConnectSerializer, DispatchOrderEstimateSerializer, DispatchOrderStationEstimateSerializer, DispatchOrderTourCustomerSerializer, LocationHistoryRequestSerializer, LocationHistorySerializer, DriverCheckRequestSerializer, StationArrivalTimeSerializer, ConnectRequestSerializer, DailyDispatchOrderConnectListSerializer, DailyDispatchRegularlyConnectListSerializer, GetOffWorkDataSerialzier, GetOffWorkRequestSerializer, DispatchRegularlyConnectListSerializer, DispatchOrderConnectListSerializer, DispatchOrderConnectDetailSerializer, DispatchRegularlyConnectDetailSerializer, \
-    ProblemOrderConnectListSerializer, ProblemRegularlyConnectListSerializer, ProblemOrderConnectDetailSerializer, ProblemRegularlyConnectDetailSerializer, DispatchRegularlyFavoriteSerializer
+    ProblemOrderConnectListSerializer, ProblemRegularlyConnectListSerializer, ProblemOrderConnectDetailSerializer, ProblemRegularlyConnectDetailSerializer, DispatchRegularlyFavoriteSerializer, DispatchRegularlyDataDetailSerializer
 from my_settings import SUNGHWATOUR_CRED_PATH, CRED_PATH
 from itertools import chain
 from operator import itemgetter
@@ -756,11 +756,11 @@ class RegularlyList(ListAPIView):
     pagination_class = Pagination
 
     def get_queryset(self):
+        user_id = self.request.user.id
         group_id = self.request.GET.get('group', '')
         search = self.request.GET.get('search', '')
         know = self.request.GET.get('know', '') 
         favorite = self.request.GET.get('favorite', '')
-        user_id = self.request.user.id
 
         base_queryset = DispatchRegularlyData.objects.filter(use='사용')
 
@@ -784,13 +784,13 @@ class RegularlyList(ListAPIView):
         know_subquery = DispatchRegularlyRouteKnow.objects.filter(
             regularly_id=OuterRef('id'),
             driver_id=user_id
-        )
+        )[:1]
 
         # 서브쿼리를 사용해 favorite 값 추가
         favorite_subquery = DispatchRegularlyFavorite.objects.filter(
             regularly_id=OuterRef('id'),
             driver_id=user_id
-        )
+        )[:1]
 
         # annotate로 'know' 및 'favorite' 필드 추가
         queryset = queryset.annotate(
@@ -805,7 +805,6 @@ class RegularlyList(ListAPIView):
                 output_field=CharField()
             )
         )
-
         # know 필터링
         if know not in [None, '']:
             queryset = queryset.filter(know=know)
@@ -823,32 +822,35 @@ class RegularlyList(ListAPIView):
         return context
 
     def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
         queryset = self.filter_queryset(self.get_queryset())
+        know_count = queryset.filter(know='true').count()
+        favorite_count = queryset.filter(know='true').count()
 
-        # 노선 숙지된 수 계산
-        check_count = queryset.filter(know='true').count()
-
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            response_data = self.get_paginated_response(serializer.data).data
-        else:
-            serializer = self.get_serializer(queryset, many=True)
-            response_data = serializer.data
+        # page = self.paginate_queryset(queryset)
+        # if page is not None:
+        #     serializer = self.get_serializer(page, many=True)
+        #     response_data = self.get_paginated_response(serializer.data).data
+        # else:
+        #     serializer = self.get_serializer(queryset, many=True)
+        #     response_data = serializer.data
 
         # 응답 데이터 구성
         data = {
             'result': 'true',
             'message': '',
             'data': {
-                'count': queryset.count(),
-                'check_count': check_count,
-                'next': response_data.get('next'),
-                'previous': response_data.get('previous'),
-                'regularly_list': response_data.get('results'),
+                'count': DispatchRegularlyData.objects.filter(use='사용').count(),
+                'know_count': know_count,
+                'favorite_count': favorite_count,
+                'query_count': queryset.count(),
+                'next': response.data.get('next'),
+                'previous': response.data.get('previous'),
+                'regularly_list': response.data.get('results'),
             },
         }
         return Response(data)
+
 
     def handle_exception(self, exc):
         return Response({
@@ -858,6 +860,22 @@ class RegularlyList(ListAPIView):
                 'detail': str(exc),
             },
         }, status=400)
+
+class RegularlyDetailView(APIView):
+    def get(self, request, id):
+        user_id = self.request.user.id
+
+        try:
+            regularly = DispatchRegularlyData.objects.get(id=id)
+        except DispatchRegularlyData.DoesNotExist:
+            StandardResponse.get_response(False, '1', {'error': 'invalid id'}, status.HTTP_404_NOT_FOUND)
+        
+        serializer = DispatchRegularlyDataDetailSerializer(regularly, context={
+            'user' : user_id,
+        })
+        return StandardResponse.get_response(True, serializer.data, "", status.HTTP_200_OK)
+
+
 
 class RegularlyGroupList(ListAPIView):
     queryset = RegularlyGroup.objects.all().order_by('number')

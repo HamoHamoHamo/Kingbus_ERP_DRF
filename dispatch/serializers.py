@@ -455,7 +455,7 @@ class DispatchRegularlyDataSerializer(serializers.ModelSerializer):
 
     def get_know(self, obj):
         # 미리 annotate된 값을 사용
-        return obj.is_known if hasattr(obj, 'is_known') else 'false'
+        return obj.know if hasattr(obj, 'know') else 'false'
     
     def get_favorite(self, obj):
         # 미리 annotate된 값을 사용
@@ -467,6 +467,49 @@ class DispatchRegularlyDataSerializer(serializers.ModelSerializer):
 
         return representation
 
+class DispatchRegularlyDataDetailSerializer(serializers.ModelSerializer):
+    group = serializers.CharField(source='group.name', read_only=True)
+    know = serializers.SerializerMethodField()
+    favorite = serializers.SerializerMethodField()
+    stations = serializers.SerializerMethodField()  # 필터링된 정류장 목록 가져오기
+
+    class Meta:
+        model = DispatchRegularlyData
+        fields = [
+            "group",
+            "route",
+            "departure",
+            "arrival",
+            "know",
+            "favorite",
+            "references",
+            "maplink",
+            "departure_time",
+            "arrival_time",
+            "stations",
+        ]
+    
+    def get_know(self, obj):
+        user = self.context.get('user')
+        return "true" if DispatchRegularlyRouteKnow.objects.filter(regularly_id=obj, driver_id=user).exists() else 'false'
+    
+    def get_favorite(self, obj):
+        user = self.context.get('user')
+        return "true" if DispatchRegularlyFavorite.objects.filter(regularly_id=obj, driver_id=user).exists() else 'false'
+
+    def get_stations(self, obj):
+        # obj의 work_type에 따라 정류장을 필터링
+        work_type = obj.work_type  # DispatchRegularlyConnect 인스턴스의 work_type
+
+        if work_type == '출근':
+            filtered_stations = obj.monthly.last().regularly_station.filter(station_type__in=['정류장', '사업장'])
+        elif work_type == '퇴근':
+            filtered_stations = obj.monthly.last().regularly_station.filter(station_type__in=['사업장', '정류장', '마지막 정류장'])
+        else:
+            filtered_stations = obj.monthly.last().regularly_station.all()  # 기본값은 전체 정류장
+
+        return DispatchRegularlyStationSerializer(filtered_stations, many=True).data
+    
 class DispatchRegularlyGroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = RegularlyGroup
