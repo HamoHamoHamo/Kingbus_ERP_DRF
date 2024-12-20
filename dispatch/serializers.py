@@ -783,13 +783,14 @@ class DailyDispatchOrderConnectListSerializer(serializers.ModelSerializer):
     departure = serializers.CharField(source='order_id.departure')
     arrival = serializers.CharField(source='order_id.arrival')
     bus_num = serializers.CharField(source='bus_id.vehicle_num')
-    status_info = serializers.CharField(default="", allow_blank=True)
+    status_info = serializers.SerializerMethodField()
     
     class Meta:
         model = DispatchOrderConnect
         fields = [
             'dispatch_id',
             'work_type',
+            'bus_id',
             'bus_num',
             'departure',
             'departure_date',
@@ -798,6 +799,9 @@ class DailyDispatchOrderConnectListSerializer(serializers.ModelSerializer):
             'status',
             'status_info',
         ]
+
+    def get_status_info(self, obj):
+        return []
 
 # 퇴근 데이터
 class GetOffWorkDataSerialzier(serializers.ModelSerializer):
