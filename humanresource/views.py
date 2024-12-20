@@ -28,7 +28,7 @@ from firebase.media_firebase import upload_to_firebase
 from .serializers import UserLoginSerializer, MemberListSerializer, MemberSerializer, AccidentCaseSereializer, NotificationSerializer
 from .models import Member, Salary, SalaryChecked, AccidentCase
 from dispatch.models import DispatchRegularlyConnect, DispatchOrderConnect
-from assignment.models import AssignmentConnect
+from assignment.models import OldAssignmentConnect
 from common.constant import FORMAT
 from salary.services import SalaryDataController2
 from rest_framework.pagination import PageNumberPagination
@@ -456,7 +456,7 @@ def salary_detail_hourly(request):
             total_list[c_date] += 1
 
         # 업무 급여 데이터
-        assignments = AssignmentConnect.objects.filter(start_date__range=(f'{month}-01 00:00', f'{month}-{last_date} 24:00')).filter(type='일반업무').filter(member_id=member)
+        assignments = OldAssignmentConnect.objects.filter(start_date__range=(f'{month}-01 00:00', f'{month}-{last_date} 24:00')).filter(type='일반업무').filter(member_id=member)
         assignment_cnt = assignments.count()
         for assignment in list(assignments.values('assignment_id__assignment', 'start_date', 'allowance')):
             c_date = int(assignment['start_date'][8:10]) - 1
@@ -466,7 +466,7 @@ def salary_detail_hourly(request):
 
             assignment_total_list[c_date] += 1
         
-        regularly_assignments = AssignmentConnect.objects.filter(start_date__range=(f'{month}-01 00:00', f'{month}-{last_date} 24:00')).filter(type='고정업무').filter(member_id=member)
+        regularly_assignments = OldAssignmentConnect.objects.filter(start_date__range=(f'{month}-01 00:00', f'{month}-{last_date} 24:00')).filter(type='고정업무').filter(member_id=member)
         regularly_assignment_cnt = regularly_assignments.count()
         for regularly_assignment in list(regularly_assignments.values('assignment_id__assignment', 'start_date', 'allowance')):
             c_date = int(regularly_assignment['start_date'][8:10]) - 1

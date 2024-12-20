@@ -119,6 +119,14 @@ class MemberFile(models.Model):
 #     def __str__(self):
 #         return self.member_id.name
 
+class Department(models.Model):
+    name = models.CharField(verbose_name='부서 이름', max_length=50, null=False, unique=True)
+
+    pub_date = models.DateTimeField(auto_now_add=True, verbose_name='작성시간')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정시간')
+    creator = models.ForeignKey(Member, on_delete=models.SET_NULL, related_name="department_creator", db_column="creator_id", null=True)
+
+
 class Notification(models.Model):
     CATEGORY_CHOCIES = [
         ('문제발생', '문제발생'),

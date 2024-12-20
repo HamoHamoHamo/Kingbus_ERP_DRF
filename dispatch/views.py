@@ -1104,6 +1104,7 @@ class MorningChecklistView(APIView):
         }
         return Response(response, status=status.HTTP_400_BAD_REQUEST)
     
+    # 1시간, 20분 범위 겹치는 배차 has_issue 발생하지 않도록 처리
     def check_daily_connects(self, date, user):
         regularly_connects, order_connects = DispatchConnectService.get_daily_connect_list(date, user)
         combined_data = list(regularly_connects.values('departure_date', 'arrival_date', 'id', 'work_type')) + list(order_connects.values('departure_date', 'arrival_date', 'id', 'work_type'))
