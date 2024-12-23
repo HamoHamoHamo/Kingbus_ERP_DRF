@@ -43,15 +43,32 @@ class NoticeSerializer(serializers.ModelSerializer):
 		return representation
 
 class NoticeListSerializer(serializers.ModelSerializer):
-	class Meta:
-		model = Notice
-		fields = ['id', 'title', 'view_cnt', 'pub_date', 'creator', 'is_urgency', 'is_important', 'is_read']
 
-	def to_representation(self, instance):
-		representation = super().to_representation(instance)
-		representation['creator'] = Member.objects.get(id=representation['creator']).name if representation['creator'] else None
-		representation['pub_date'] = str(representation['pub_date'])[:16].replace('T', ' ')
-		return representation
+    is_read = serializers.SerializerMethodField() 
+
+    class Meta:
+        model = Notice
+        fields = ['id', 'title', 'view_cnt', 'pub_date', 'creator', 'is_urgency', 'is_important', 'is_read']
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+
+        representation['creator'] = (
+            Member.objects.get(id=representation['creator']).name if representation['creator'] else None
+        )
+
+        representation['pub_date'] = str(representation['pub_date'])[:16].replace('T', ' ')
+
+        return representation
+
+    def get_is_read(self, obj):
+        # 사용자와 NoticeViewCnt를 기준으로 읽음 여부 확인
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            # NoticeViewCnt에서 해당 공지와 사용자 기준으로 읽음 여부 확인
+            return NoticeViewCnt.objects.filter(notice_id=obj, user_id=request.user).exists()
+        return False
+
 
 class CommentSerializer(serializers.ModelSerializer):
 	class Meta:
@@ -63,4 +80,11 @@ class CommentSerializer(serializers.ModelSerializer):
 		representation['creator'] = Member.objects.get(id=representation['creator']).name if representation['creator'] else None
 		representation['pub_date'] = str(representation['pub_date'])[:16].replace('T', ' ')
 		return representation
+
+# 공지 읽음 여부
+class NoticeViewCntSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NoticeViewCnt
+        fields = ['notice_id', 'user_id', 'pub_date']  
+        read_only_fields = ['pub_date'] 
 

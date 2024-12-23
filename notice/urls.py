@@ -5,7 +5,7 @@ urlpatterns = [
     path('', views.NoticeListView.as_view()),
     path('/<int:id>', views.NoticeDetailView.as_view()),
     path('/comment', views.CommentView.as_view()),
-    path('/read', views.NoticeIsReadView.as_view()),
+    path('/read', views.NoticeAsReadAPIView.as_view()),
 
     path('/rule/approval/print', views.approval_rule_print, name='approval_rule_print'),
     path('/rule/rollcall/print', views.roll_call_rule_print, name='roll_call_rule_print'),
