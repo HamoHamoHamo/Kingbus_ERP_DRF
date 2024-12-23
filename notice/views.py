@@ -6,9 +6,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from trp_drf.settings import DATE_FORMAT ,TODAY
 from .models import Notice, NoticeFile, NoticeComment, NoticeViewCnt
-from .serializers import NoticeSerializer, NoticeListSerializer, CommentSerializer
+from .serializers import NoticeSerializer, NoticeListSerializer, CommentSerializer, NoticeViewCntSerializer
 from humanresource.models import Member
 from trp_drf.pagination import Pagination
+from rest_framework.permissions import IsAuthenticated
 
 class NoticeListView(ListAPIView):
     queryset = Notice.objects.filter(kinds='driver').order_by('-pub_date')
@@ -21,42 +22,44 @@ class NoticeDetailView(APIView):
         response = NoticeSerializer(queryset, context={'request': request}).data
         return Response(response, status=status.HTTP_200_OK)
 
-# 읽음 여부 확인
-class NoticeIsReadView(APIView) :
-    def patch(self, request) :
+class NoticeAsReadAPIView(APIView):
+    def post(self, request):
         notice_id = request.data.get('notice_id')
 
-        if not notice_id :
-            return Response({
-                'result' : 'false',
-                'message' : '공지 ID가 없습니다.'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # 사용자와 공지 ID로 필터링
-        notice = Notice.objects.filter(id=notice_id, creator=request.user).first()
-
-        # 공지가 없을 경우
-        if not notice:
+        if not notice_id:
             return Response({
                 'result': 'false',
-                'message': '해당 공지를 찾을 수 없거나 권한이 없습니다.'
+                "message": "공지 ID가 필요합니다."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 공지 존재 여부
+        try:
+            notice = Notice.objects.get(id=notice_id)
+        except Notice.DoesNotExist:
+            return Response({
+                'result': 'false',
+                "message": "해당 공지를 찾을 수 없습니다."
             }, status=status.HTTP_404_NOT_FOUND)
 
-        # 이미 읽음 상태인지 확인
-        if notice.is_read : 
+        # 이미 읽음 여부
+        user = request.user
+        if NoticeViewCnt.objects.filter(notice_id=notice, user_id=user).exists():
             return Response({
-                'result' : 'false',
-                'message' : '이미 읽음 처리된 공지입니다.'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # 읽음 여부 저장
-        notice.is_read = True
-        notice.save()        
-        
-        return Response({
-            'result': 'true',
-            'message': '공지가 읽음 상태로 변경'
-        }, status=status.HTTP_200_OK)
+                'result': 'false',
+                "message": "이미 읽은 공지입니다."
+            }, status=status.HTTP_200_OK)
+
+        # 읽음 처리
+        data = {'notice_id': notice.id, 'user_id': user.id}
+        serializer = NoticeViewCntSerializer(data=data)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                'result': 'true',
+                "message": "공지 읽음 처리가 완료되었습니다."
+            }, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
 class CommentView(APIView):
     def post(self, request):
