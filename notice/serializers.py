@@ -45,7 +45,7 @@ class NoticeSerializer(serializers.ModelSerializer):
 class NoticeListSerializer(serializers.ModelSerializer):
 	class Meta:
 		model = Notice
-		fields = ['id', 'title', 'view_cnt', 'pub_date', 'creator']
+		fields = ['id', 'title', 'view_cnt', 'pub_date', 'creator', 'is_urgency', 'is_important', 'is_read']
 
 	def to_representation(self, instance):
 		representation = super().to_representation(instance)
