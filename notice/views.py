@@ -20,6 +20,43 @@ class NoticeDetailView(APIView):
         queryset = get_object_or_404(Notice, id=id)
         response = NoticeSerializer(queryset, context={'request': request}).data
         return Response(response, status=status.HTTP_200_OK)
+
+# 읽음 여부 확인
+class NoticeIsReadView(APIView) :
+    def patch(self, request) :
+        notice_id = request.data.get('notice_id')
+
+        if not notice_id :
+            return Response({
+                'result' : 'false',
+                'message' : '공지 ID가 없습니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 사용자와 공지 ID로 필터링
+        notice = Notice.objects.filter(id=notice_id, creator=request.user).first()
+
+        # 공지가 없을 경우
+        if not notice:
+            return Response({
+                'result': 'false',
+                'message': '해당 공지를 찾을 수 없거나 권한이 없습니다.'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # 이미 읽음 상태인지 확인
+        if notice.is_read : 
+            return Response({
+                'result' : 'false',
+                'message' : '이미 읽음 처리된 공지입니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 읽음 여부 저장
+        notice.is_read = True
+        notice.save()        
+        
+        return Response({
+            'result': 'true',
+            'message': '공지가 읽음 상태로 변경'
+        }, status=status.HTTP_200_OK)
     
 class CommentView(APIView):
     def post(self, request):
