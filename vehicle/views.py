@@ -8,13 +8,13 @@ from rest_framework.response import Response
 
 from trp_drf.settings import DATE_FORMAT
 
-from .serializers import RefuelingSerializer, DailyChecklistSerializer, WeeklyChecklistSerializer, EquipmentChecklistSerializer
-from .models import Vehicle, DailyChecklist, WeeklyChecklist, EquipmentChecklist
+from .serializers import RefuelingSerializer, DailyChecklistSerializer, WeeklyChecklistSerializer, EquipmentChecklistSerializer, RefuelingListSerializer
+from .models import Vehicle, DailyChecklist, WeeklyChecklist, EquipmentChecklist, Refueling
 from crudmember.models import Category
 from dispatch.models import ConnectStatus
 from dispatch.services import DispatchConnectService
 from humanresource.models import Member
-
+from trp_drf.pagination import Pagination
 
 class VehicleListView(APIView):
     def get(self, request):
@@ -24,6 +24,38 @@ class VehicleListView(APIView):
         return Response(response, status=status.HTTP_200_OK)
        
 class RefuelingView(APIView):
+    pagination_class = Pagination
+
+    def get(self, request, *args, **kwargs):
+        # refueling_date를 기준으로 최신 데이터 정렬
+        queryset = Refueling.objects.filter(driver=request.user).order_by('-refueling_date')
+
+        # 페이지 처리
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request)
+        if page is not None:
+            serializer = RefuelingListSerializer(page, many=True)
+            paginated_response = paginator.get_paginated_response(serializer.data)
+
+            return Response({
+                "data": {
+                    "count": paginated_response.data["count"],  # 전체 데이터 개수
+                    "next": paginated_response.data["next"],  # 다음 페이지 링크
+                    "previous": paginated_response.data["previous"],  # 이전 페이지 링크
+                    "refueling_list": paginated_response.data["results"]  # 주유 기록 리스트
+                }
+            }, status=status.HTTP_200_OK)
+        
+        # 페이지네이션 결과가 없을 경우
+        return Response({
+            "data": {
+                "count": 0,
+                "next": None,
+                "previous": None,
+                "refueling_list": []
+            }
+        }, status=status.HTTP_200_OK)   
+    
     def post(self, request):
         try:
             datetime.strptime(request.data['refueling_date'], "%Y-%m-%d %H:%M")
@@ -310,3 +342,36 @@ class EquipmentChecklistView(APIView):
             }
         }
         return Response(response, status=status.HTTP_400_BAD_REQUEST)
+
+# class RefuelingListView(APIView) :
+#     pagination_class = Pagination
+
+#     def get(self, request, *args, **kwargs):
+#         # refueling_date를 기준으로 최신 데이터 정렬
+#         queryset = Refueling.objects.all().order_by('-refueling_date')
+
+#         # 페이지 처리
+#         paginator = self.pagination_class()
+#         page = paginator.paginate_queryset(queryset, request)
+#         if page is not None:
+#             serializer = RefuelingSerializer(page, many=True)
+#             paginated_response = paginator.get_paginated_response(serializer.data)
+
+#             return Response({
+#                 "data": {
+#                     "count": paginated_response.data["count"],  # 전체 데이터 개수
+#                     "next": paginated_response.data["next"],  # 다음 페이지 링크
+#                     "previous": paginated_response.data["previous"],  # 이전 페이지 링크
+#                     "refueling_list": paginated_response.data["results"]  # 주유 기록 리스트
+#                 }
+#             }, status=status.HTTP_200_OK)
+        
+#         # 페이지네이션 결과가 없을 경우
+#         return Response({
+#             "data": {
+#                 "count": 0,
+#                 "next": None,
+#                 "previous": None,
+#                 "refueling_list": []
+#             }
+#         }, status=status.HTTP_200_OK)    
